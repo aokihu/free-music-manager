@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="900" viewBox="0 0 1440 900">
+  <style>
+    text { font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif; fill: #20241f; }
+    .label { font-size: 14px; fill: #747a72; }
+    .body { font-size: 16px; }
+    .title { font-size: 24px; font-weight: 700; }
+    .small { font-size: 12px; fill: #777d75; }
+  </style>
+  <rect width="1440" height="900" fill="#f4f5f2"/>
+  <rect width="240" height="900" fill="#171a17"/>
+  <rect x="24" y="28" width="34" height="34" rx="8" fill="#c9f45c"/>
+  <text x="70" y="50" fill="#fff" font-size="16" font-weight="700">FreeMusic Manager</text>
+  <rect x="16" y="136" width="208" height="44" rx="8" fill="#c9f45c"/>
+  <text x="48" y="164" class="body">歌曲管理</text>
+  <text x="280" y="62" class="title">歌曲管理</text>
+  <rect x="1210" y="34" width="190" height="44" rx="8" fill="#20241f"/>
+  <text x="1250" y="62" fill="#fff" class="body">导入歌曲</text>
+  <rect x="280" y="120" width="1120" height="690" rx="16" fill="#fff" stroke="#d6d9d3"/>
+
+  <rect width="1440" height="900" fill="#111" opacity="0.42"/>
+  <rect x="330" y="90" width="780" height="720" rx="18" fill="#fff"/>
+  <text x="370" y="142" class="title">导入音乐</text>
+  <text x="370" y="170" class="label">选择一首音乐文件，本地分析文件与 Tag 信息</text>
+  <circle cx="1064" cy="136" r="18" fill="#f0f1ee"/>
+  <text x="1058" y="142" class="body">×</text>
+  <line x1="330" y1="194" x2="1110" y2="194" stroke="#e3e5e0"/>
+
+  <rect x="370" y="226" width="700" height="190" rx="14" fill="#fafbf8" stroke="#a7aca4" stroke-width="2" stroke-dasharray="8 8"/>
+  <circle cx="720" cy="280" r="24" fill="#e7e9e4"/>
+  <text x="690" y="330" class="body">拖放音乐文件到这里</text>
+  <text x="663" y="357" class="small">或点击选择 · 单文件 · MP3 / M4A / WAV / FLAC / OGG</text>
+  <rect x="658" y="375" width="124" height="32" rx="7" fill="#20241f"/>
+  <text x="682" y="396" fill="#fff" font-size="13">选择文件</text>
+
+  <text x="370" y="462" font-size="16" font-weight="700">分析结果</text>
+  <rect x="370" y="482" width="700" height="222" rx="12" fill="#f8f9f6" stroke="#e0e2dd"/>
+  <rect x="392" y="504" width="94" height="94" rx="9" fill="#d9dcd6"/>
+  <text x="409" y="557" class="small">内嵌封面</text>
+  <text x="510" y="524" class="label">文件</text>
+  <text x="510" y="549" class="body">rain-afterglow.mp3</text>
+  <text x="510" y="578" class="small">MP3 · 03:12 · 8.4 MB · 320 kbps</text>
+  <line x1="392" y1="618" x2="1048" y2="618" stroke="#e0e2dd"/>
+  <text x="392" y="646" class="label">TITLE</text>
+  <text x="480" y="646" class="body">雨后回声</text>
+  <text x="690" y="646" class="label">ARTIST</text>
+  <text x="780" y="646" class="body">FreeMusic AI</text>
+  <text x="392" y="678" class="label">GENRE</text>
+  <rect x="480" y="660" width="60" height="26" rx="13" fill="#e8ebE5"/>
+  <text x="496" y="678" class="small">氛围</text>
+  <rect x="548" y="660" width="74" height="26" rx="13" fill="#e8ebe5"/>
+  <text x="562" y="678" class="small">轻电子</text>
+  <text x="690" y="678" class="label">BPM</text>
+  <text x="780" y="678" class="body">92</text>
+
+  <line x1="330" y1="738" x2="1110" y2="738" stroke="#e3e5e0"/>
+  <text x="370" y="776" class="small">当前只在浏览器本地分析，不会保存或上传到云端</text>
+  <rect x="914" y="754" width="76" height="38" rx="8" fill="#f2f3f0" stroke="#d4d7d1"/>
+  <text x="938" y="778" class="label">取消</text>
+  <rect x="1000" y="754" width="70" height="38" rx="8" fill="#20241f"/>
+  <text x="1022" y="778" fill="#fff" font-size="14">完成</text>
+</svg>

@@ -1,36 +1,48 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# FreeMusic Manager
 
-## Getting Started
+FreeMusic 的独立曲库与发布管理后台。当前已完成响应式管理界面，以及桌面端单曲拖放导入、音频 Tag 分析和本地曲库保存。
 
-First, run the development server:
+## 技术栈
+
+- React / Next.js App Router
+- Shadcn UI
+- Zustand
+- Tailwind CSS v4
+
+## 本地运行
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+默认使用项目内的 `storage` 目录保存运行数据。可以先复制环境变量示例：
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+cp .env.example .env.local
+npm run dev
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+默认访问 `http://localhost:3000`。如果前台项目占用 3000 端口，可使用：
 
-## Learn More
+```bash
+npm run dev -- --port 3001
+```
 
-To learn more about Next.js, take a look at the following resources:
+## 当前边界
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- 这是独立仓库，不与 `FreeMusic` 前台代码混放。
+- 当前不接入公开曲库 API、Cloudflare R2、登录、支付或订单系统。
+- 桌面端可以选择或拖放单首音频，在浏览器分析 Tag，并把确认后的音频、内嵌封面和曲目记录保存到本地曲库。
+- 本地曲库默认包含 `storage/audio`、`storage/covers` 和 `storage/catalog/tracks.json`；整个运行目录不会进入 Git。
+- 存储由适配器统一处理。`MUSIC_STORAGE_DRIVER=local` 使用本地目录，`MUSIC_LOCAL_STORAGE_PATH` 可以修改目录位置。
+- `r2` 驱动名称已经预留，但本阶段没有实现 R2 适配器；将来实现后，业务保存链路只需通过环境变量切换，不需要改上传组件。
+- 移动端只提供歌曲管理界面，不提供上传入口。
+- 当前不生成可复制给前台的发布包，也不自动修改前台仓库。
+- 每次只实现一个阶段，验收通过后再进入下一阶段。
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+本阶段尚未加入管理员登录，请不要把管理后台直接暴露到公网。
 
-## Deploy on Vercel
+## 开发计划
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- `docs/manager-development-plan.md`

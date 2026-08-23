@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="390" height="844" viewBox="0 0 390 844">
+  <style>
+    text { font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif; fill: #20241f; }
+    .label { font-size: 12px; fill: #777d75; }
+    .body { font-size: 14px; }
+    .title { font-size: 25px; font-weight: 700; }
+  </style>
+  <rect width="390" height="844" fill="#f4f5f2"/>
+  <rect width="390" height="72" fill="#fff"/>
+  <rect x="16" y="18" width="36" height="36" rx="9" fill="#c9f45c"/>
+  <text x="64" y="34" font-size="14" font-weight="700">FreeMusic</text>
+  <text x="64" y="51" class="label">Manager</text>
+  <rect x="334" y="16" width="40" height="40" rx="9" fill="#fff" stroke="#d5d8d2"/>
+  <text x="348" y="42" font-size="20">≡</text>
+  <text x="16" y="108" class="label">曲库管理</text>
+  <text x="16" y="143" class="title">歌曲概览</text>
+  <text x="16" y="169" class="label">移动端仅查看与管理，不提供上传入口</text>
+  <rect x="16" y="194" width="171" height="96" rx="12" fill="#fff" stroke="#d9dcd6"/>
+  <text x="32" y="221" class="label">歌曲总数</text><text x="32" y="257" font-size="26" font-weight="700">6</text>
+  <rect x="203" y="194" width="171" height="96" rx="12" fill="#fff" stroke="#d9dcd6"/>
+  <text x="219" y="221" class="label">已发布</text><text x="219" y="257" font-size="26" font-weight="700">3</text>
+  <text x="16" y="334" font-size="18" font-weight="700">歌曲管理</text>
+  <text x="16" y="359" class="label">共 6 首歌曲</text>
+  <rect x="16" y="380" width="358" height="142" rx="12" fill="#fff" stroke="#d9dcd6"/>
+  <rect x="32" y="398" width="44" height="44" rx="9" fill="#20241f"/>
+  <text x="88" y="416" class="body" font-weight="700">雨后回声</text><text x="88" y="437" class="label">FreeMusic AI</text>
+  <rect x="302" y="399" width="56" height="24" rx="12" fill="#dff5e7"/><text x="314" y="416" class="label">已发布</text>
+  <rect x="88" y="456" width="46" height="26" rx="7" fill="#f2f3f0"/><text x="99" y="474" class="label">氛围</text>
+  <rect x="140" y="456" width="58" height="26" rx="7" fill="#f2f3f0"/><text x="151" y="474" class="label">轻电子</text>
+  <text x="88" y="505" class="label">更新于 今天 10:24</text>
+  <rect x="16" y="536" width="358" height="142" rx="12" fill="#fff" stroke="#d9dcd6"/>
+  <rect x="32" y="554" width="44" height="44" rx="9" fill="#20241f"/>
+  <text x="88" y="572" class="body" font-weight="700">微光流动</text><text x="88" y="593" class="label">FreeMusic AI</text>
+  <rect x="314" y="555" width="44" height="24" rx="12" fill="#fff3c4"/><text x="324" y="572" class="label">草稿</text>
+  <rect x="88" y="612" width="46" height="26" rx="7" fill="#f2f3f0"/><text x="99" y="630" class="label">专注</text>
+  <rect x="140" y="612" width="50" height="26" rx="7" fill="#f2f3f0"/><text x="151" y="630" class="label">Chill</text>
+  <text x="88" y="661" class="label">更新于 昨天 18:42</text>
+</svg>
