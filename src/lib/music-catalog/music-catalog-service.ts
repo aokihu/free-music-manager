@@ -5,8 +5,18 @@ import path from "node:path";
 import { parseBuffer } from "music-metadata";
 
 import { getMusicStorage } from "../storage";
-import { listStoredTracks, saveStoredTrack } from "./catalog-repository";
-import type { ManagerTrack, MusicDraftInput, StoredTrack } from "./types";
+import {
+  listStoredTracks,
+  saveStoredTrack,
+  updateStoredTrackDraft,
+  updateStoredTrackStatus,
+} from "./catalog-repository";
+import type {
+  ManagerTrack,
+  MusicDraftInput,
+  StoredTrack,
+  TrackPublicationStatus,
+} from "./types";
 
 const coverExtensions: Record<string, string> = {
   "image/jpeg": "jpg",
@@ -38,11 +48,32 @@ function toManagerTrack(track: StoredTrack): ManagerTrack {
   return {
     id: track.id,
     title: track.title,
-    artist: track.artist || "未知作者",
+    artist: track.artist,
+    album: track.album,
+    genres: track.genres,
+    bpm: track.bpm,
+    mood: track.mood,
+    year: track.year,
+    comment: track.comment,
     tags: tags.length > 0 ? tags : ["待补充 Tag"],
     status: track.status,
     updatedAtLabel: formatUpdatedAt(track.updatedAt),
+    audio: track.audio,
   };
+}
+
+export async function updateMusicTrackDraft(
+  trackId: string,
+  draft: MusicDraftInput,
+) {
+  return updateStoredTrackDraft(trackId, draft);
+}
+
+export async function updateMusicTrackStatus(
+  trackId: string,
+  nextStatus: TrackPublicationStatus,
+) {
+  return updateStoredTrackStatus(trackId, nextStatus);
 }
 
 export async function listManagerTracks() {

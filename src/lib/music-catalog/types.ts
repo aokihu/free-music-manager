@@ -38,7 +38,14 @@ export type ManagerTrack = {
   id: string;
   title: string;
   artist: string;
+  album: string;
+  genres: string[];
+  bpm?: number;
+  mood: string;
+  year?: number;
+  comment: string;
   tags: string[];
   status: TrackPublicationStatus;
   updatedAtLabel: string;
+  audio: StoredTrack["audio"];
 };

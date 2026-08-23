@@ -10,8 +10,10 @@ import {
   Upload,
 } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
+import { MusicEditDialog } from "@/components/music-edit-dialog";
+import { MusicStatusDialog } from "@/components/music-status-dialog";
 import { MusicUploadDialog } from "@/components/music-upload-dialog";
+import { trackStatusLabels } from "@/lib/music-catalog/publication-status";
 import {
   listManagerTracks,
   type ManagerTrack,
@@ -19,12 +21,6 @@ import {
 } from "@/lib/music-catalog/music-catalog-service";
 
 export const dynamic = "force-dynamic";
-
-const statusLabels: Record<TrackPublicationStatus, string> = {
-  draft: "草稿",
-  published: "已发布",
-  offline: "已下架",
-};
 
 const statusClassNames: Record<TrackPublicationStatus, string> = {
   draft: "bg-amber-100 text-amber-800",
@@ -102,7 +98,7 @@ function StatusBadge({ status }: { status: TrackPublicationStatus }) {
     <span
       className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${statusClassNames[status]}`}
     >
-      {statusLabels[status]}
+      {trackStatusLabels[status]}
     </span>
   );
 }
@@ -132,7 +128,7 @@ function DesktopTrackTable({ tracks }: { tracks: ManagerTrack[] }) {
             <th className="w-[28%] px-5 py-3.5" scope="col">
               歌曲
             </th>
-            <th className="w-[33%] px-5 py-3.5" scope="col">
+            <th className="w-[29%] px-5 py-3.5" scope="col">
               Tag
             </th>
             <th className="w-[14%] px-5 py-3.5" scope="col">
@@ -141,7 +137,7 @@ function DesktopTrackTable({ tracks }: { tracks: ManagerTrack[] }) {
             <th className="w-[17%] px-5 py-3.5" scope="col">
               更新时间
             </th>
-            <th className="w-[8%] px-5 py-3.5 text-right" scope="col">
+            <th className="w-[12%] px-5 py-3.5 text-right" scope="col">
               操作
             </th>
           </tr>
@@ -159,7 +155,7 @@ function DesktopTrackTable({ tracks }: { tracks: ManagerTrack[] }) {
                       {track.title}
                     </strong>
                     <span className="mt-1 block truncate text-xs text-zinc-500">
-                      {track.artist}
+                      {track.artist || "未知作者"}
                     </span>
                   </span>
                 </div>
@@ -173,10 +169,11 @@ function DesktopTrackTable({ tracks }: { tracks: ManagerTrack[] }) {
               <td className="px-5 py-4 text-xs text-zinc-500">
                 {track.updatedAtLabel}
               </td>
-              <td className="px-5 py-4 text-right">
-                <Button disabled size="sm" variant="ghost">
-                  编辑
-                </Button>
+              <td className="px-5 py-4">
+                <div className="flex justify-end gap-1">
+                  <MusicEditDialog track={track} />
+                  <MusicStatusDialog track={track} />
+                </div>
               </td>
             </tr>
           ))}
@@ -200,7 +197,7 @@ function MobileTrackList({ tracks }: { tracks: ManagerTrack[] }) {
                 <div className="min-w-0">
                   <h3 className="truncate text-sm font-medium">{track.title}</h3>
                   <p className="mt-1 truncate text-xs text-zinc-500">
-                    {track.artist}
+                    {track.artist || "未知作者"}
                   </p>
                 </div>
                 <StatusBadge status={track.status} />
@@ -212,6 +209,10 @@ function MobileTrackList({ tracks }: { tracks: ManagerTrack[] }) {
                 <Clock3 className="size-3.5" aria-hidden="true" />
                 更新于 {track.updatedAtLabel}
               </p>
+              <div className="mt-4 grid grid-cols-2 gap-2">
+                <MusicEditDialog mobile track={track} />
+                <MusicStatusDialog mobile track={track} />
+              </div>
             </div>
           </div>
         </article>
@@ -232,7 +233,7 @@ export default async function Home() {
 
   const overviewItems = [
     { label: "歌曲总数", value: tracks.length, detail: "本地曲库" },
-    { label: "已发布", value: publishedCount, detail: "前台可见" },
+    { label: "已发布", value: publishedCount, detail: "等待发布包同步" },
     { label: "草稿", value: draftCount, detail: "等待补全" },
     { label: "已下架", value: offlineCount, detail: "停止展示" },
   ];
@@ -248,9 +249,9 @@ export default async function Home() {
         </div>
         <div className="mt-auto rounded-xl border border-white/10 bg-white/5 p-4">
           <p className="text-xs font-medium text-zinc-300">当前阶段</p>
-          <p className="mt-2 text-sm font-medium">本地曲库与 Tag 预检</p>
+          <p className="mt-2 text-sm font-medium">本地曲库管理闭环</p>
           <p className="mt-1 text-xs leading-5 text-zinc-500">
-            桌面端分析并保存文件，移动端仅用于管理。
+            支持歌曲导入、信息编辑和发布状态管理。
           </p>
         </div>
       </aside>

@@ -1,10 +1,31 @@
 import "server-only";
 
 import { getMusicStorage } from "../storage";
-import type { StoredTrack } from "./types";
+import { canChangeTrackStatus, trackStatusLabels } from "./publication-status";
+import type {
+  MusicDraftInput,
+  StoredTrack,
+  TrackPublicationStatus,
+} from "./types";
 
 const catalogKey = "catalog/tracks.json";
 let catalogWriteQueue = Promise.resolve();
+
+async function writeCatalog(tracks: StoredTrack[]) {
+  const catalogBytes = new TextEncoder().encode(JSON.stringify(tracks, null, 2));
+  await getMusicStorage().putObject(catalogKey, catalogBytes, {
+    contentType: "application/json",
+  });
+}
+
+async function queueCatalogWrite<T>(operation: () => Promise<T>) {
+  const currentWrite = catalogWriteQueue.then(operation, operation);
+  catalogWriteQueue = currentWrite.then(
+    () => undefined,
+    () => undefined,
+  );
+  return currentWrite;
+}
 
 function isStoredTrack(value: unknown): value is StoredTrack {
   if (!value || typeof value !== "object") return false;
@@ -39,25 +60,60 @@ export async function listStoredTracks() {
 }
 
 export async function saveStoredTrack(track: StoredTrack) {
-  const writeTrack = async () => {
+  await queueCatalogWrite(async () => {
     const tracks = await listStoredTracks();
     const existingIndex = tracks.findIndex((item) => item.id === track.id);
 
     if (existingIndex >= 0) tracks[existingIndex] = track;
     else tracks.unshift(track);
 
-    const catalogBytes = new TextEncoder().encode(
-      JSON.stringify(tracks, null, 2),
-    );
-    await getMusicStorage().putObject(catalogKey, catalogBytes, {
-      contentType: "application/json",
-    });
-  };
+    await writeCatalog(tracks);
+  });
+}
 
-  const currentWrite = catalogWriteQueue.then(writeTrack, writeTrack);
-  catalogWriteQueue = currentWrite.then(
-    () => undefined,
-    () => undefined,
-  );
-  await currentWrite;
+export async function updateStoredTrackDraft(
+  trackId: string,
+  draft: MusicDraftInput,
+) {
+  return queueCatalogWrite(async () => {
+    const tracks = await listStoredTracks();
+    const trackIndex = tracks.findIndex((track) => track.id === trackId);
+    if (trackIndex < 0) throw new Error("未找到要编辑的歌曲");
+
+    const updatedTrack: StoredTrack = {
+      ...tracks[trackIndex],
+      ...draft,
+      updatedAt: new Date().toISOString(),
+    };
+    tracks[trackIndex] = updatedTrack;
+    await writeCatalog(tracks);
+    return updatedTrack;
+  });
+}
+
+export async function updateStoredTrackStatus(
+  trackId: string,
+  nextStatus: TrackPublicationStatus,
+) {
+  return queueCatalogWrite(async () => {
+    const tracks = await listStoredTracks();
+    const trackIndex = tracks.findIndex((track) => track.id === trackId);
+    if (trackIndex < 0) throw new Error("未找到要更新状态的歌曲");
+
+    const currentTrack = tracks[trackIndex];
+    if (!canChangeTrackStatus(currentTrack.status, nextStatus)) {
+      throw new Error(
+        `不能从“${trackStatusLabels[currentTrack.status]}”变更为“${trackStatusLabels[nextStatus]}”`,
+      );
+    }
+
+    const updatedTrack: StoredTrack = {
+      ...currentTrack,
+      status: nextStatus,
+      updatedAt: new Date().toISOString(),
+    };
+    tracks[trackIndex] = updatedTrack;
+    await writeCatalog(tracks);
+    return updatedTrack;
+  });
 }
