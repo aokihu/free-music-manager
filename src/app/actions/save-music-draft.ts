@@ -35,7 +35,7 @@ export async function saveMusicDraft(
       draft,
     );
     revalidatePath("/");
-    return { ok: true, message: "歌曲已保存到本地曲库", trackId: track.id };
+    return { ok: true, message: "歌曲上传并保存成功", trackId: track.id };
   } catch (error) {
     return {
       ok: false,

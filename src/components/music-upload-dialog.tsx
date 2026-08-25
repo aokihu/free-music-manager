@@ -37,6 +37,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
   parseMusicFolderEntries,
+  recommendedSongAudioSizeBytes,
   type IncomingMusicFile,
   type MusicFolder,
 } from "@/lib/music-catalog/music-folder";
@@ -72,8 +73,15 @@ type MusicDraft = {
   comment: string;
 };
 
+type UploadBatchSize = {
+  audioBytes: number;
+  coverBytes: number;
+  totalBytes: number;
+};
+
 type BatchMusicItem = {
   folder: MusicFolder;
+  uploadSize: UploadBatchSize;
   high: MusicFileAnalysis;
   low: MusicFileAnalysis;
   coverUrl: string;
@@ -102,6 +110,17 @@ type BrowserFileEntry = {
 function formatFileSize(bytes: number) {
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function readUploadBatchSize(folder: MusicFolder): UploadBatchSize {
+  const audioBytes = folder.highFile.size + folder.lowFile.size;
+  const coverBytes = folder.coverFile.size;
+
+  return {
+    audioBytes,
+    coverBytes,
+    totalBytes: audioBytes + coverBytes,
+  };
 }
 
 function formatDuration(seconds?: number) {
@@ -310,10 +329,12 @@ export function MusicUploadDialog() {
 
     try {
       const folders = parseMusicFolderEntries(entries);
+      const uploadBatchSizes = folders.map(readUploadBatchSize);
       const { parseBlob } = await import("music-metadata");
       const nextItems: BatchMusicItem[] = [];
 
-      for (const folder of folders) {
+      for (const [folderIndex, folder] of folders.entries()) {
+        const uploadSize = uploadBatchSizes[folderIndex];
         const [highMetadata, lowMetadata] = await Promise.all([
           parseBlob(folder.highFile, { duration: true }),
           parseBlob(folder.lowFile, { duration: true }),
@@ -357,6 +378,11 @@ export function MusicUploadDialog() {
         ) {
           warnings.push("高清版与低清版时长差异明显，请确认它们是同一首歌曲");
         }
+        if (uploadSize.audioBytes > recommendedSongAudioSizeBytes) {
+          warnings.push(
+            `高清版与低清版合计 ${formatFileSize(uploadSize.audioBytes)}，建议控制在 20 MB 以内`,
+          );
+        }
         const coverUrl = URL.createObjectURL(folder.coverFile);
         const highUrl = URL.createObjectURL(folder.highFile);
         const lowUrl = URL.createObjectURL(folder.lowFile);
@@ -366,6 +392,7 @@ export function MusicUploadDialog() {
 
         nextItems.push({
           folder,
+          uploadSize,
           high: createFileAnalysis(folder.highFile, highMetadata),
           low: createFileAnalysis(folder.lowFile, lowMetadata),
           coverUrl,
@@ -553,7 +580,7 @@ export function MusicUploadDialog() {
         <DialogHeader className="border-b px-6 py-5 pr-14">
           <DialogTitle className="text-xl">批量导入歌曲文件夹</DialogTitle>
           <DialogDescription>
-            每个歌曲文件夹必须包含 __h 高清音频、__l.ogg 低清音频和 PNG/JPEG 封面。
+            每个文件夹形成一个上传批次；双版本音频建议合计不超过 20 MB。
           </DialogDescription>
         </DialogHeader>
 
@@ -627,9 +654,9 @@ export function MusicUploadDialog() {
             <section className="grid gap-3" aria-label="批量歌曲分析结果">
               <div className="flex items-center justify-between gap-4">
                 <div>
-                  <h2 className="font-medium">已识别 {items.length} 个歌曲文件夹</h2>
+                  <h2 className="font-medium">已识别 {items.length} 个上传批次</h2>
                   <p className="mt-1 text-xs text-zinc-500">
-                    点击歌曲可以展开并修改从高清版读取的 Tag。
+                    已先读取本地文件大小；每首歌曲作为一个批次顺序上传。
                   </p>
                 </div>
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-800">
@@ -673,14 +700,15 @@ export function MusicUploadDialog() {
                           {item.draft.title || item.folder.baseName}
                         </strong>
                         <span className="mt-1 block truncate text-xs text-zinc-500">
-                          {item.folder.folderPath} · 高清 Tag {item.nativeTagCount} 个
+                          批次 {itemIndex + 1} · 音频 {formatFileSize(item.uploadSize.audioBytes)} ·
+                          封面 {formatFileSize(item.uploadSize.coverBytes)} · 合计 {formatFileSize(item.uploadSize.totalBytes)}
                         </span>
                       </span>
                       <span className="text-xs font-medium text-zinc-500">
                         {item.saveState === "saving"
-                          ? "正在保存…"
+                          ? "正在上传…"
                           : item.saveState === "saved"
-                            ? "已保存"
+                            ? "已上传"
                             : item.saveState === "error"
                               ? "保存失败"
                               : "待保存"}
@@ -873,8 +901,10 @@ export function MusicUploadDialog() {
         <DialogFooter className="mx-0 mb-0 px-6 py-4">
           <p className="mr-auto self-center text-xs text-zinc-500">
             {items.length > 0
-              ? `已保存 ${savedCount}/${items.length} 首，按歌曲顺序逐个写入`
-              : "每个歌曲文件夹独立保存"}
+              ? `已上传 ${savedCount}/${items.length} 个批次 · 总计 ${formatFileSize(
+                  items.reduce((total, item) => total + item.uploadSize.totalBytes, 0),
+                )}`
+              : "每首歌曲作为一个独立上传批次"}
           </p>
           <DialogClose render={<Button variant="outline" disabled={isSaving} />}>
             关闭
@@ -898,7 +928,9 @@ export function MusicUploadDialog() {
             }
             onClick={handleSaveAll}
           >
-            {isSaving ? "正在批量保存…" : `保存 ${items.length - savedCount} 首歌曲`}
+            {isSaving
+              ? `正在上传第 ${Math.min(savedCount + 1, items.length)}/${items.length} 个批次…`
+              : `上传 ${items.length - savedCount} 个批次`}
           </Button>
         </DialogFooter>
       </DialogContent>

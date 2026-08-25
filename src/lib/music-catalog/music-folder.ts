@@ -11,6 +11,8 @@ export const supportedHighQualityExtensions = new Set([
 
 export const maxMusicFileSizeBytes = 200 * 1024 * 1024;
 export const maxCoverFileSizeBytes = 20 * 1024 * 1024;
+export const recommendedSongAudioSizeBytes = 20 * 1024 * 1024;
+export const maxSongUploadBatchSizeBytes = 40 * 1024 * 1024;
 
 export type IncomingMusicFile = {
   file: File;
@@ -78,6 +80,10 @@ function parseMusicFolder(
   if (coverFile.size === 0) throw new Error(`${coverFile.name} 是空文件`);
   if (coverFile.size > maxCoverFileSizeBytes) {
     throw new Error(`${coverFile.name} 超过 20 MB`);
+  }
+  const uploadBatchSize = highFile.size + lowFile.size + coverFile.size;
+  if (uploadBatchSize > maxSongUploadBatchSizeBytes) {
+    throw new Error(`${folderName} 的单曲上传批次超过 40 MB`);
   }
 
   return {
