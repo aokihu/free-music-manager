@@ -4,9 +4,10 @@ export type MusicDraftInput = {
   title: string;
   artist: string;
   album: string;
-  genres: string[];
+  genreIds: string[];
   bpm?: number;
-  mood: string;
+  moodIds: string[];
+  useCaseIds: string[];
   year?: number;
   comment: string;
 };
@@ -45,9 +46,13 @@ export type ManagerTrack = {
   title: string;
   artist: string;
   album: string;
+  genreIds: string[];
   genres: string[];
   bpm?: number;
-  mood: string;
+  moodIds: string[];
+  moods: string[];
+  useCaseIds: string[];
+  useCases: string[];
   year?: number;
   comment: string;
   tags: string[];

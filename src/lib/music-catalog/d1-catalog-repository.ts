@@ -1,6 +1,6 @@
 import "server-only";
 
-import { isStoredTrack } from "./is-stored-track";
+import { isStoredTrack, normalizeStoredTrack } from "./is-stored-track";
 import { canChangeTrackStatus, trackStatusLabels } from "./publication-status";
 import type { MusicCatalogRepository } from "./repository-types";
 import type {
@@ -26,7 +26,7 @@ function parseStoredTrackRow(row: MusicTrackRow) {
     throw new Error("D1 曲库中的歌曲数据格式无效");
   }
 
-  return value;
+  return normalizeStoredTrack(value);
 }
 
 export class D1MusicCatalogRepository implements MusicCatalogRepository {
@@ -57,12 +57,16 @@ export class D1MusicCatalogRepository implements MusicCatalogRepository {
   async saveTrack(track: StoredTrack) {
     await this.database
       .prepare(
-        `INSERT INTO music_tracks (id, status, title, updated_at, track_json)
-         VALUES (?, ?, ?, ?, ?)
+        `INSERT INTO music_tracks
+           (id, status, title, updated_at, genre_ids, mood_ids, use_case_ids, track_json)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(id) DO UPDATE SET
            status = excluded.status,
            title = excluded.title,
            updated_at = excluded.updated_at,
+           genre_ids = excluded.genre_ids,
+           mood_ids = excluded.mood_ids,
+           use_case_ids = excluded.use_case_ids,
            track_json = excluded.track_json`,
       )
       .bind(
@@ -70,6 +74,9 @@ export class D1MusicCatalogRepository implements MusicCatalogRepository {
         track.status,
         track.title,
         track.updatedAt,
+        JSON.stringify(track.genreIds),
+        JSON.stringify(track.moodIds),
+        JSON.stringify(track.useCaseIds),
         JSON.stringify(track),
       )
       .run();

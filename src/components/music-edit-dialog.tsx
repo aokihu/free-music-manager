@@ -32,6 +32,12 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { TaxonomyMultiSelect } from "@/components/taxonomy-multi-select";
+import {
+  musicGenreOptions,
+  musicMoodOptions,
+  musicUseCaseOptions,
+} from "@/lib/music-catalog/music-taxonomy";
 import type {
   ManagerTrack,
   StoredAudioFile,
@@ -41,9 +47,10 @@ type EditableMusicDraft = {
   title: string;
   artist: string;
   album: string;
-  genres: string;
+  genreIds: string[];
   bpm: string;
-  mood: string;
+  moodIds: string[];
+  useCaseIds: string[];
   year: string;
   comment: string;
 };
@@ -55,9 +62,10 @@ function createEditableDraft(track: ManagerTrack): EditableMusicDraft {
     title: track.title,
     artist: track.artist,
     album: track.album,
-    genres: track.genres.join(", "),
+    genreIds: track.genreIds,
     bpm: track.bpm?.toString() ?? "",
-    mood: track.mood,
+    moodIds: track.moodIds,
+    useCaseIds: track.useCaseIds,
     year: track.year?.toString() ?? "",
     comment: track.comment,
   };
@@ -134,7 +142,10 @@ export function MusicEditDialog({
     }
   }
 
-  function updateDraft(field: keyof EditableMusicDraft, value: string) {
+  function updateDraft<Field extends keyof EditableMusicDraft>(
+    field: Field,
+    value: EditableMusicDraft[Field],
+  ) {
     setDraft((currentDraft) => ({ ...currentDraft, [field]: value }));
     setErrorMessage("");
     setSaveSucceeded(false);
@@ -368,12 +379,12 @@ export function MusicEditDialog({
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor={`edit-genres-${track.id}`}>风格</Label>
-              <Input
-                id={`edit-genres-${track.id}`}
-                value={draft.genres}
-                placeholder="多个值使用逗号分隔"
-                onChange={(event) => updateDraft("genres", event.currentTarget.value)}
+              <Label>风格</Label>
+              <TaxonomyMultiSelect
+                label="风格"
+                options={musicGenreOptions}
+                value={draft.genreIds}
+                onChange={(genreIds) => updateDraft("genreIds", genreIds)}
               />
             </div>
             <div className="grid gap-2">
@@ -389,12 +400,23 @@ export function MusicEditDialog({
               {!bpmIsValid && <p className="text-xs text-red-600">BPM 必须是 1–300</p>}
             </div>
             <div className="grid gap-2">
-              <Label htmlFor={`edit-mood-${track.id}`}>情绪</Label>
-              <Input
-                id={`edit-mood-${track.id}`}
-                value={draft.mood}
-                placeholder="例如：平静、专注"
-                onChange={(event) => updateDraft("mood", event.currentTarget.value)}
+              <Label>情绪</Label>
+              <TaxonomyMultiSelect
+                label="情绪"
+                options={musicMoodOptions}
+                value={draft.moodIds}
+                onChange={(moodIds) => updateDraft("moodIds", moodIds)}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label>场景</Label>
+              <TaxonomyMultiSelect
+                label="场景"
+                options={musicUseCaseOptions}
+                value={draft.useCaseIds}
+                onChange={(useCaseIds) =>
+                  updateDraft("useCaseIds", useCaseIds)
+                }
               />
             </div>
             <div className="grid gap-2">

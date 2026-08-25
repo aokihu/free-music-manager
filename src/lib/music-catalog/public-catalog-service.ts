@@ -1,6 +1,12 @@
 import "server-only";
 
 import { listStoredTracks } from "./catalog-repository";
+import {
+  getMusicTaxonomyLabels,
+  musicGenreOptions,
+  musicMoodOptions,
+  musicUseCaseOptions,
+} from "./music-taxonomy";
 import type { StoredTrack } from "./types";
 
 export const publicApiCorsHeaders = {
@@ -17,14 +23,25 @@ function createPublicUrl(origin: string, pathname: string) {
 
 function toPublicTrack(track: StoredTrack, origin: string) {
   const trackPath = `/api/tracks/${encodeURIComponent(track.id)}`;
+  const genres = getMusicTaxonomyLabels(track.genreIds, musicGenreOptions);
+  const moods = getMusicTaxonomyLabels(track.moodIds, musicMoodOptions);
+  const useCases = getMusicTaxonomyLabels(
+    track.useCaseIds,
+    musicUseCaseOptions,
+  );
 
   return {
     id: track.id,
     title: track.title,
     artist: track.artist,
-    mood: track.mood,
-    genre: track.genres[0] ?? "",
-    useCases: [] as string[],
+    mood: moods[0] ?? "",
+    moods,
+    moodIds: track.moodIds,
+    genre: genres[0] ?? "",
+    genres,
+    genreIds: track.genreIds,
+    useCases,
+    useCaseIds: track.useCaseIds,
     bpm: track.bpm ?? null,
     durationSeconds: track.audio.low.durationSeconds ?? null,
     coverUrl: createPublicUrl(

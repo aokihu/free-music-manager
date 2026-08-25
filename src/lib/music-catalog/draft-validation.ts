@@ -1,4 +1,10 @@
 import type { MusicDraftInput } from "./types";
+import {
+  musicGenreOptions,
+  musicMoodOptions,
+  musicUseCaseOptions,
+  parseMusicTaxonomyIds,
+} from "./music-taxonomy";
 
 function parseOptionalNumber(value: unknown, minimum: number, maximum: number) {
   if (value === undefined || value === null || value === "") return undefined;
@@ -29,15 +35,10 @@ export function parseMusicDraft(
     title,
     artist: typeof draft.artist === "string" ? draft.artist.trim() : "",
     album: typeof draft.album === "string" ? draft.album.trim() : "",
-    genres:
-      typeof draft.genres === "string"
-        ? draft.genres
-            .split(/[,，]/)
-            .map((genre) => genre.trim())
-            .filter(Boolean)
-        : [],
+    genreIds: parseMusicTaxonomyIds(draft.genreIds, musicGenreOptions),
     bpm: parseOptionalNumber(draft.bpm, 1, 300),
-    mood: typeof draft.mood === "string" ? draft.mood.trim() : "",
+    moodIds: parseMusicTaxonomyIds(draft.moodIds, musicMoodOptions),
+    useCaseIds: parseMusicTaxonomyIds(draft.useCaseIds, musicUseCaseOptions),
     year,
     comment: typeof draft.comment === "string" ? draft.comment.trim() : "",
   };

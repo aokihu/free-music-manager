@@ -13,6 +13,12 @@ import {
 } from "./catalog-repository";
 import { parseMusicFolderFiles } from "./music-folder";
 import { maxCoverFileSizeBytes } from "./music-folder";
+import {
+  getMusicTaxonomyLabels,
+  musicGenreOptions,
+  musicMoodOptions,
+  musicUseCaseOptions,
+} from "./music-taxonomy";
 import type {
   ManagerTrack,
   MusicDraftInput,
@@ -30,9 +36,16 @@ function formatUpdatedAt(value: string) {
 }
 
 function toManagerTrack(track: StoredTrack): ManagerTrack {
+  const genres = getMusicTaxonomyLabels(track.genreIds, musicGenreOptions);
+  const moods = getMusicTaxonomyLabels(track.moodIds, musicMoodOptions);
+  const useCases = getMusicTaxonomyLabels(
+    track.useCaseIds,
+    musicUseCaseOptions,
+  );
   const tags = [
-    ...track.genres,
-    track.mood,
+    ...genres,
+    ...moods,
+    ...useCases,
     track.bpm ? `${track.bpm} BPM` : "",
   ].filter(Boolean);
 
@@ -41,9 +54,13 @@ function toManagerTrack(track: StoredTrack): ManagerTrack {
     title: track.title,
     artist: track.artist,
     album: track.album,
-    genres: track.genres,
+    genreIds: track.genreIds,
+    genres,
     bpm: track.bpm,
-    mood: track.mood,
+    moodIds: track.moodIds,
+    moods,
+    useCaseIds: track.useCaseIds,
+    useCases,
     year: track.year,
     comment: track.comment,
     tags: tags.length > 0 ? tags : ["待补充 Tag"],

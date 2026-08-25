@@ -2,7 +2,7 @@ import "server-only";
 
 import type { MusicStorageAdapter } from "../storage/types";
 import { canChangeTrackStatus, trackStatusLabels } from "./publication-status";
-import { isStoredTrack } from "./is-stored-track";
+import { isStoredTrack, normalizeStoredTrack } from "./is-stored-track";
 import type { MusicCatalogRepository } from "./repository-types";
 import type {
   MusicDraftInput,
@@ -44,7 +44,7 @@ export class JsonMusicCatalogRepository implements MusicCatalogRepository {
       throw new Error("本地曲库索引格式无效");
     }
 
-    return catalog;
+    return catalog.map(normalizeStoredTrack);
   }
 
   async saveTrack(track: StoredTrack) {

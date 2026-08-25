@@ -1,4 +1,11 @@
 import type { StoredTrack } from "./types";
+import {
+  findMusicTaxonomyIds,
+  musicGenreOptions,
+  musicMoodOptions,
+  musicUseCaseOptions,
+  parseMusicTaxonomyIds,
+} from "./music-taxonomy";
 
 export function isStoredTrack(value: unknown): value is StoredTrack {
   if (!value || typeof value !== "object") return false;
@@ -19,4 +26,28 @@ export function isStoredTrack(value: unknown): value is StoredTrack {
         (typeof track.cover.key === "string" &&
           typeof track.cover.contentType === "string")),
   );
+}
+
+export function normalizeStoredTrack(value: StoredTrack) {
+  const legacyTrack = value as StoredTrack & {
+    genres?: string[];
+    mood?: string;
+  };
+  const genreIds = Array.isArray(legacyTrack.genreIds)
+    ? parseMusicTaxonomyIds(legacyTrack.genreIds, musicGenreOptions)
+    : findMusicTaxonomyIds(legacyTrack.genres ?? [], musicGenreOptions);
+  const moodIds = Array.isArray(legacyTrack.moodIds)
+    ? parseMusicTaxonomyIds(legacyTrack.moodIds, musicMoodOptions)
+    : findMusicTaxonomyIds(legacyTrack.mood ? [legacyTrack.mood] : [], musicMoodOptions);
+  const useCaseIds = parseMusicTaxonomyIds(
+    legacyTrack.useCaseIds,
+    musicUseCaseOptions,
+  );
+  const track = Object.fromEntries(
+    Object.entries(legacyTrack).filter(
+      ([key]) => key !== "genres" && key !== "mood",
+    ),
+  ) as StoredTrack;
+
+  return { ...track, genreIds, moodIds, useCaseIds } satisfies StoredTrack;
 }

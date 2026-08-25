@@ -34,12 +34,19 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { TaxonomyMultiSelect } from "@/components/taxonomy-multi-select";
 import {
   parseMusicFolderEntries,
   recommendedSongAudioSizeBytes,
   type IncomingMusicFile,
   type MusicFolder,
 } from "@/lib/music-catalog/music-folder";
+import {
+  findMusicTaxonomyIds,
+  musicGenreOptions,
+  musicMoodOptions,
+  musicUseCaseOptions,
+} from "@/lib/music-catalog/music-taxonomy";
 
 type AnalysisState = "idle" | "analyzing" | "ready" | "error";
 type SaveState = "ready" | "saving" | "saved" | "error";
@@ -65,9 +72,10 @@ type MusicDraft = {
   title: string;
   artist: string;
   album: string;
-  genres: string;
+  genreIds: string[];
   bpm: string;
-  mood: string;
+  moodIds: string[];
+  useCaseIds: string[];
   year: string;
   comment: string;
 };
@@ -448,9 +456,16 @@ export function MusicUploadDialog() {
             title: highMetadata.common.title?.trim() || folder.baseName,
             artist: highMetadata.common.artist ?? "",
             album: highMetadata.common.album ?? "",
-            genres: highMetadata.common.genre?.join(", ") ?? "",
+            genreIds: findMusicTaxonomyIds(
+              highMetadata.common.genre ?? [],
+              musicGenreOptions,
+            ),
             bpm: highMetadata.common.bpm?.toString() ?? "",
-            mood: highMetadata.common.mood ?? "",
+            moodIds: findMusicTaxonomyIds(
+              highMetadata.common.mood ? [highMetadata.common.mood] : [],
+              musicMoodOptions,
+            ),
+            useCaseIds: [],
             year: highMetadata.common.year?.toString() ?? "",
             comment:
               highMetadata.common.comment
@@ -534,10 +549,10 @@ export function MusicUploadDialog() {
     setPreviewCurrentTime(value);
   }
 
-  function updateDraft(
+  function updateDraft<Field extends keyof MusicDraft>(
     itemIndex: number,
-    field: keyof MusicDraft,
-    value: string,
+    field: Field,
+    value: MusicDraft[Field],
   ) {
     setItems((currentItems) =>
       currentItems.map((item, index) =>
@@ -858,13 +873,13 @@ export function MusicUploadDialog() {
                           />
                         </div>
                         <div className="grid gap-2">
-                          <Label htmlFor={`batch-genres-${itemIndex}`}>风格</Label>
-                          <Input
-                            id={`batch-genres-${itemIndex}`}
-                            value={item.draft.genres}
-                            placeholder="多个值使用逗号分隔"
-                            onChange={(event) =>
-                              updateDraft(itemIndex, "genres", event.currentTarget.value)
+                          <Label>风格</Label>
+                          <TaxonomyMultiSelect
+                            label="风格"
+                            options={musicGenreOptions}
+                            value={item.draft.genreIds}
+                            onChange={(genreIds) =>
+                              updateDraft(itemIndex, "genreIds", genreIds)
                             }
                           />
                         </div>
@@ -884,12 +899,24 @@ export function MusicUploadDialog() {
                           )}
                         </div>
                         <div className="grid gap-2">
-                          <Label htmlFor={`batch-mood-${itemIndex}`}>情绪</Label>
-                          <Input
-                            id={`batch-mood-${itemIndex}`}
-                            value={item.draft.mood}
-                            onChange={(event) =>
-                              updateDraft(itemIndex, "mood", event.currentTarget.value)
+                          <Label>情绪</Label>
+                          <TaxonomyMultiSelect
+                            label="情绪"
+                            options={musicMoodOptions}
+                            value={item.draft.moodIds}
+                            onChange={(moodIds) =>
+                              updateDraft(itemIndex, "moodIds", moodIds)
+                            }
+                          />
+                        </div>
+                        <div className="grid gap-2">
+                          <Label>场景</Label>
+                          <TaxonomyMultiSelect
+                            label="场景"
+                            options={musicUseCaseOptions}
+                            value={item.draft.useCaseIds}
+                            onChange={(useCaseIds) =>
+                              updateDraft(itemIndex, "useCaseIds", useCaseIds)
                             }
                           />
                         </div>
