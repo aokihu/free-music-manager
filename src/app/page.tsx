@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 
 import { MusicEditDialog } from "@/components/music-edit-dialog";
+import { MusicDeleteDialog } from "@/components/music-delete-dialog";
 import { MusicStatusDialog } from "@/components/music-status-dialog";
 import { MusicUploadDialog } from "@/components/music-upload-dialog";
 import { trackStatusLabels } from "@/lib/music-catalog/publication-status";
@@ -35,7 +36,7 @@ function Brand() {
         <Music2 className="size-5" aria-hidden="true" />
       </span>
       <span>
-        <strong className="block text-sm tracking-wide">FreeMusic</strong>
+        <strong className="block text-sm tracking-wide">Tingever</strong>
         <span className="block text-xs text-zinc-500">Manager</span>
       </span>
     </div>
@@ -173,6 +174,7 @@ function DesktopTrackTable({ tracks }: { tracks: ManagerTrack[] }) {
                 <div className="flex justify-end gap-1">
                   <MusicEditDialog track={track} />
                   <MusicStatusDialog track={track} />
+                  <MusicDeleteDialog track={track} />
                 </div>
               </td>
             </tr>
@@ -212,6 +214,9 @@ function MobileTrackList({ tracks }: { tracks: ManagerTrack[] }) {
               <div className="mt-4 grid grid-cols-2 gap-2">
                 <MusicEditDialog mobile track={track} />
                 <MusicStatusDialog mobile track={track} />
+                <div className="col-span-2">
+                  <MusicDeleteDialog mobile track={track} />
+                </div>
               </div>
             </div>
           </div>
@@ -233,7 +238,7 @@ export default async function Home() {
 
   const overviewItems = [
     { label: "歌曲总数", value: tracks.length, detail: "本地曲库" },
-    { label: "已发布", value: publishedCount, detail: "等待发布包同步" },
+    { label: "已发布", value: publishedCount, detail: "前台 API 可读取" },
     { label: "草稿", value: draftCount, detail: "等待补全" },
     { label: "已下架", value: offlineCount, detail: "停止展示" },
   ];

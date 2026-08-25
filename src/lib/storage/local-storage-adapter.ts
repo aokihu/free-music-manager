@@ -1,21 +1,14 @@
 import "server-only";
 
-import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, rm, rmdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 
+import { parseStorageObjectKey } from "./parse-storage-object-key";
 import type { MusicStorageAdapter } from "./types";
 
 function resolveStorageObjectPath(rootPath: string, key: string) {
-  const normalizedKey = key.replaceAll("\\", "/");
-
-  if (
-    !normalizedKey ||
-    path.posix.isAbsolute(normalizedKey) ||
-    normalizedKey.split("/").some((segment) => segment === ".." || !segment)
-  ) {
-    throw new Error(`无效的存储对象路径：${key}`);
-  }
+  const normalizedKey = parseStorageObjectKey(key);
 
   const objectPath = path.resolve(rootPath, ...normalizedKey.split("/"));
   const relativePath = path.relative(rootPath, objectPath);
@@ -27,11 +20,39 @@ function resolveStorageObjectPath(rootPath: string, key: string) {
   return objectPath;
 }
 
+async function removeEmptyParentDirectories(rootPath: string, objectPath: string) {
+  let directoryPath = path.dirname(objectPath);
+
+  while (directoryPath !== rootPath) {
+    try {
+      await rmdir(directoryPath);
+    } catch (error) {
+      if (
+        error instanceof Error &&
+        "code" in error &&
+        (error.code === "ENOENT" ||
+          error.code === "ENOTEMPTY" ||
+          error.code === "EEXIST")
+      ) {
+        return;
+      }
+      throw error;
+    }
+    directoryPath = path.dirname(directoryPath);
+  }
+}
+
 export class LocalMusicStorageAdapter implements MusicStorageAdapter {
   private readonly rootPath: string;
 
   constructor(rootPath: string) {
     this.rootPath = path.resolve(rootPath);
+  }
+
+  async deleteObject(key: string) {
+    const objectPath = resolveStorageObjectPath(this.rootPath, key);
+    await rm(objectPath, { force: true });
+    await removeEmptyParentDirectories(this.rootPath, objectPath);
   }
 
   async getObject(key: string) {

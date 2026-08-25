@@ -11,20 +11,26 @@ export type MusicDraftInput = {
   comment: string;
 };
 
+export type StoredAudioFile = {
+  key: string;
+  fileName: string;
+  contentType: string;
+  sizeBytes: number;
+  sha256: string;
+  container?: string;
+  durationSeconds?: number;
+  bitrateKbps?: number;
+  sampleRateHz?: number;
+  numberOfChannels?: number;
+};
+
 export type StoredTrack = MusicDraftInput & {
   id: string;
+  sourceFolderName: string;
   status: TrackPublicationStatus;
   audio: {
-    key: string;
-    fileName: string;
-    contentType: string;
-    sizeBytes: number;
-    sha256: string;
-    container?: string;
-    durationSeconds?: number;
-    bitrateKbps?: number;
-    sampleRateHz?: number;
-    numberOfChannels?: number;
+    high: StoredAudioFile;
+    low: StoredAudioFile;
   };
   cover?: {
     key: string;
@@ -48,4 +54,6 @@ export type ManagerTrack = {
   status: TrackPublicationStatus;
   updatedAtLabel: string;
   audio: StoredTrack["audio"];
+  coverUrl: string;
+  hasCover: boolean;
 };

@@ -5,9 +5,10 @@ import { useRouter } from "next/navigation";
 import {
   AlertCircle,
   CheckCircle2,
-  FileAudio,
+  FolderOpen,
   LoaderCircle,
-  Music2,
+  Pause,
+  Play,
   Upload,
 } from "lucide-react";
 import {
@@ -34,34 +35,30 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { getTitleFromFileName } from "@/lib/music-file";
-
-const supportedExtensions = new Set([
-  "aac",
-  "aiff",
-  "flac",
-  "m4a",
-  "mp3",
-  "ogg",
-  "opus",
-  "wav",
-]);
-const maxFileSizeBytes = 200 * 1024 * 1024;
+import {
+  parseMusicFolderEntries,
+  type IncomingMusicFile,
+  type MusicFolder,
+} from "@/lib/music-catalog/music-folder";
 
 type AnalysisState = "idle" | "analyzing" | "ready" | "error";
-type SaveState = "idle" | "success" | "error";
+type SaveState = "ready" | "saving" | "saved" | "error";
+type AudioVersion = "high" | "low";
 
-type MusicAnalysis = {
+type ActivePreview = {
+  itemIndex: number;
+  version: AudioVersion;
+};
+
+type MusicFileAnalysis = {
   fileName: string;
   fileSize: string;
   format: string;
   duration: string;
+  durationSeconds?: number;
   bitrate: string;
   sampleRate: string;
   channels: string;
-  coverUrl?: string;
-  nativeTagCount: number;
-  warnings: string[];
 };
 
 type MusicDraft = {
@@ -75,13 +72,32 @@ type MusicDraft = {
   comment: string;
 };
 
-function getFileExtension(fileName: string) {
-  return fileName.split(".").pop()?.toLowerCase() ?? "";
-}
+type BatchMusicItem = {
+  folder: MusicFolder;
+  high: MusicFileAnalysis;
+  low: MusicFileAnalysis;
+  coverUrl: string;
+  highUrl: string;
+  lowUrl: string;
+  nativeTagCount: number;
+  warnings: string[];
+  draft: MusicDraft;
+  saveState: SaveState;
+  errorMessage: string;
+};
 
-function isSupportedAudioFile(file: File) {
-  return file.type.startsWith("audio/") || supportedExtensions.has(getFileExtension(file.name));
-}
+type BrowserFileEntry = {
+  isDirectory: boolean;
+  isFile: boolean;
+  name: string;
+  file?: (success: (file: File) => void, failure: (error: Error) => void) => void;
+  createReader?: () => {
+    readEntries: (
+      success: (entries: BrowserFileEntry[]) => void,
+      failure: (error: Error) => void,
+    ) => void;
+  };
+};
 
 function formatFileSize(bytes: number) {
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
@@ -89,7 +105,7 @@ function formatFileSize(bytes: number) {
 }
 
 function formatDuration(seconds?: number) {
-  if (!seconds || !Number.isFinite(seconds)) return "未知时长";
+  if (seconds === undefined || !Number.isFinite(seconds)) return "未知时长";
   const minutes = Math.floor(seconds / 60);
   const remainingSeconds = Math.floor(seconds % 60);
   return `${minutes.toString().padStart(2, "0")}:${remainingSeconds
@@ -102,35 +118,178 @@ function formatSampleRate(sampleRate?: number) {
   return `${(sampleRate / 1000).toFixed(sampleRate % 1000 === 0 ? 0 : 1)} kHz`;
 }
 
+function VersionAnalysisCard({
+  analysis,
+  isActive,
+  isPlaying,
+  label,
+  onTogglePreview,
+}: {
+  analysis: MusicFileAnalysis;
+  isActive: boolean;
+  isPlaying: boolean;
+  label: string;
+  onTogglePreview: () => void;
+}) {
+  return (
+    <div
+      className={`min-w-0 rounded-lg border bg-white p-3 ${
+        isActive ? "border-zinc-500 ring-1 ring-zinc-200" : ""
+      }`}
+    >
+      <div className="flex items-center gap-2">
+        <span className="rounded bg-zinc-900 px-2 py-1 text-[10px] font-medium text-lime-300">
+          {label}
+        </span>
+        <p className="min-w-0 flex-1 truncate text-sm font-medium">
+          {analysis.fileName}
+        </p>
+        <Button
+          type="button"
+          size="icon-sm"
+          variant={isActive ? "default" : "outline"}
+          aria-label={`${isActive && isPlaying ? "暂停" : "试听"}${label}`}
+          onClick={onTogglePreview}
+        >
+          {isActive && isPlaying ? (
+            <Pause aria-hidden="true" />
+          ) : (
+            <Play aria-hidden="true" />
+          )}
+        </Button>
+      </div>
+      <p className="mt-2 text-xs text-zinc-500">
+        {analysis.format} · {analysis.duration} · {analysis.fileSize}
+      </p>
+      <p className="mt-1 text-xs text-zinc-400">
+        {analysis.bitrate} · {analysis.sampleRate} · {analysis.channels}
+      </p>
+    </div>
+  );
+}
+
+async function readDirectoryEntries(entry: BrowserFileEntry) {
+  const reader = entry.createReader?.();
+  if (!reader) return [];
+  const entries: BrowserFileEntry[] = [];
+
+  while (true) {
+    const nextEntries = await new Promise<BrowserFileEntry[]>((resolve, reject) =>
+      reader.readEntries(resolve, reject),
+    );
+    if (nextEntries.length === 0) break;
+    entries.push(...nextEntries);
+  }
+
+  return entries;
+}
+
+async function collectDroppedEntry(
+  entry: BrowserFileEntry,
+  parentPath: string,
+): Promise<IncomingMusicFile[]> {
+  const relativePath = parentPath ? `${parentPath}/${entry.name}` : entry.name;
+
+  if (entry.isFile && entry.file) {
+    const file = await new Promise<File>((resolve, reject) =>
+      entry.file?.(resolve, reject),
+    );
+    return [{ file, relativePath }];
+  }
+
+  if (entry.isDirectory) {
+    const children = await readDirectoryEntries(entry);
+    const nestedFiles = await Promise.all(
+      children.map((child) => collectDroppedEntry(child, relativePath)),
+    );
+    return nestedFiles.flat();
+  }
+
+  return [];
+}
+
+async function getDroppedFiles(dataTransfer: DataTransfer) {
+  const entries = Array.from(dataTransfer.items)
+    .map<BrowserFileEntry | null | undefined>((item) => {
+      const getEntry = (
+        item as unknown as {
+          webkitGetAsEntry?: () => BrowserFileEntry | null;
+        }
+      ).webkitGetAsEntry;
+      return getEntry?.call(item);
+    })
+    .filter((entry): entry is BrowserFileEntry => Boolean(entry));
+
+  if (entries.length > 0) {
+    return (await Promise.all(entries.map((entry) => collectDroppedEntry(entry, "")))).flat();
+  }
+
+  return Array.from(dataTransfer.files).map((file) => ({
+    file,
+    relativePath: file.webkitRelativePath || file.name,
+  }));
+}
+
 export function MusicUploadDialog() {
   const router = useRouter();
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const mediaUrlsRef = useRef(new Set<string>());
   const analysisIdRef = useRef(0);
   const [open, setOpen] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [analysisState, setAnalysisState] = useState<AnalysisState>("idle");
-  const [analysis, setAnalysis] = useState<MusicAnalysis | null>(null);
-  const [draft, setDraft] = useState<MusicDraft | null>(null);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [saveState, setSaveState] = useState<SaveState>("idle");
+  const [items, setItems] = useState<BatchMusicItem[]>([]);
+  const [globalError, setGlobalError] = useState("");
+  const [activePreview, setActivePreview] = useState<ActivePreview | null>(null);
+  const [previewCurrentTime, setPreviewCurrentTime] = useState(0);
+  const [previewDuration, setPreviewDuration] = useState(0);
+  const [previewError, setPreviewError] = useState("");
+  const [previewIsPlaying, setPreviewIsPlaying] = useState(false);
   const [isSaving, startSaving] = useTransition();
-  const [errorMessage, setErrorMessage] = useState("");
 
   useEffect(
     () => () => {
-      if (analysis?.coverUrl) URL.revokeObjectURL(analysis.coverUrl);
+      audioRef.current?.pause();
+      mediaUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
     },
-    [analysis],
+    [],
   );
+
+  function setDirectoryInput(node: HTMLInputElement | null) {
+    inputRef.current = node;
+    if (node) {
+      node.setAttribute("webkitdirectory", "");
+      node.setAttribute("directory", "");
+    }
+  }
+
+  function stopPreview() {
+    const audio = audioRef.current;
+    if (audio) {
+      audio.pause();
+      audio.removeAttribute("src");
+      audio.load();
+    }
+    setActivePreview(null);
+    setPreviewCurrentTime(0);
+    setPreviewDuration(0);
+    setPreviewError("");
+    setPreviewIsPlaying(false);
+  }
+
+  function clearMediaUrls() {
+    mediaUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
+    mediaUrlsRef.current.clear();
+  }
 
   function resetAnalysis() {
     analysisIdRef.current += 1;
+    stopPreview();
+    clearMediaUrls();
     setAnalysisState("idle");
-    setAnalysis(null);
-    setDraft(null);
-    setSelectedFile(null);
-    setSaveState("idle");
-    setErrorMessage("");
+    setItems([]);
+    setGlobalError("");
     setIsDragging(false);
     if (inputRef.current) inputRef.current.value = "";
   }
@@ -140,143 +299,249 @@ export function MusicUploadDialog() {
     if (!nextOpen) resetAnalysis();
   }
 
-  async function analyzeMusicFile(file: File) {
-    if (!isSupportedAudioFile(file)) {
-      setAnalysisState("error");
-      setSelectedFile(null);
-      setErrorMessage("请选择 MP3、M4A、AAC、WAV、FLAC、OGG、OPUS 或 AIFF 音频文件");
-      return;
-    }
-
-    if (file.size > maxFileSizeBytes) {
-      setAnalysisState("error");
-      setSelectedFile(null);
-      setErrorMessage("单个文件不能超过 200 MB");
-      return;
-    }
-
+  async function analyzeMusicFolders(entries: IncomingMusicFile[]) {
     const analysisId = analysisIdRef.current + 1;
     analysisIdRef.current = analysisId;
+    stopPreview();
+    clearMediaUrls();
     setAnalysisState("analyzing");
-    setAnalysis(null);
-    setDraft(null);
-    setSelectedFile(null);
-    setSaveState("idle");
-    setErrorMessage("");
+    setItems([]);
+    setGlobalError("");
 
     try {
+      const folders = parseMusicFolderEntries(entries);
       const { parseBlob } = await import("music-metadata");
-      const metadata = await parseBlob(file, { duration: true });
-      if (analysisIdRef.current !== analysisId) return;
+      const nextItems: BatchMusicItem[] = [];
 
-      const picture = metadata.common.picture?.[0];
-      const coverUrl = picture
-        ? URL.createObjectURL(
-            new Blob([Uint8Array.from(picture.data)], { type: picture.format }),
-          )
-        : undefined;
-      const nativeTagCount = Object.values(metadata.native).reduce(
-        (total, tags) => total + tags.length,
-        0,
-      );
+      for (const folder of folders) {
+        const [highMetadata, lowMetadata] = await Promise.all([
+          parseBlob(folder.highFile, { duration: true }),
+          parseBlob(folder.lowFile, { duration: true }),
+        ]);
+        if (analysisIdRef.current !== analysisId) return;
 
-      setAnalysis({
-        fileName: file.name,
-        fileSize: formatFileSize(file.size),
-        format:
-          metadata.format.container ||
-          metadata.format.codec ||
-          getFileExtension(file.name).toUpperCase(),
-        duration: formatDuration(metadata.format.duration),
-        bitrate: metadata.format.bitrate
-          ? `${Math.round(metadata.format.bitrate / 1000)} kbps`
-          : "未知码率",
-        sampleRate: formatSampleRate(metadata.format.sampleRate),
-        channels: metadata.format.numberOfChannels
-          ? `${metadata.format.numberOfChannels} 声道`
-          : "未知声道",
-        coverUrl,
-        nativeTagCount,
-        warnings: metadata.quality.warnings.map((warning) => warning.message),
-      });
-      setDraft({
-        title:
-          metadata.common.title?.trim() || getTitleFromFileName(file.name),
-        artist: metadata.common.artist ?? "",
-        album: metadata.common.album ?? "",
-        genres: metadata.common.genre?.join(", ") ?? "",
-        bpm: metadata.common.bpm?.toString() ?? "",
-        mood: metadata.common.mood ?? "",
-        year: metadata.common.year?.toString() ?? "",
-        comment:
-          metadata.common.comment
-            ?.map((item) => item.text)
-            .filter(Boolean)
-            .join(" · ") ?? "",
-      });
-      setSelectedFile(file);
+        function createFileAnalysis(
+          file: File,
+          metadata: Awaited<ReturnType<typeof parseBlob>>,
+        ): MusicFileAnalysis {
+          return {
+            fileName: file.name,
+            fileSize: formatFileSize(file.size),
+            format: metadata.format.container || metadata.format.codec || "未知格式",
+            duration: formatDuration(metadata.format.duration),
+            durationSeconds: metadata.format.duration,
+            bitrate: metadata.format.bitrate
+              ? `${Math.round(metadata.format.bitrate / 1000)} kbps`
+              : "未知码率",
+            sampleRate: formatSampleRate(metadata.format.sampleRate),
+            channels: metadata.format.numberOfChannels
+              ? `${metadata.format.numberOfChannels} 声道`
+              : "未知声道",
+          };
+        }
+
+        const warnings = [
+          ...highMetadata.quality.warnings.map(
+            (warning) => `高清版：${warning.message}`,
+          ),
+          ...lowMetadata.quality.warnings.map(
+            (warning) => `低清版：${warning.message}`,
+          ),
+        ];
+        const highDuration = highMetadata.format.duration;
+        const lowDuration = lowMetadata.format.duration;
+        if (
+          highDuration &&
+          lowDuration &&
+          Math.abs(highDuration - lowDuration) > Math.max(2, highDuration * 0.02)
+        ) {
+          warnings.push("高清版与低清版时长差异明显，请确认它们是同一首歌曲");
+        }
+        const coverUrl = URL.createObjectURL(folder.coverFile);
+        const highUrl = URL.createObjectURL(folder.highFile);
+        const lowUrl = URL.createObjectURL(folder.lowFile);
+        mediaUrlsRef.current.add(coverUrl);
+        mediaUrlsRef.current.add(highUrl);
+        mediaUrlsRef.current.add(lowUrl);
+
+        nextItems.push({
+          folder,
+          high: createFileAnalysis(folder.highFile, highMetadata),
+          low: createFileAnalysis(folder.lowFile, lowMetadata),
+          coverUrl,
+          highUrl,
+          lowUrl,
+          nativeTagCount: Object.values(highMetadata.native).reduce(
+            (total, tags) => total + tags.length,
+            0,
+          ),
+          warnings,
+          draft: {
+            title: highMetadata.common.title?.trim() || folder.baseName,
+            artist: highMetadata.common.artist ?? "",
+            album: highMetadata.common.album ?? "",
+            genres: highMetadata.common.genre?.join(", ") ?? "",
+            bpm: highMetadata.common.bpm?.toString() ?? "",
+            mood: highMetadata.common.mood ?? "",
+            year: highMetadata.common.year?.toString() ?? "",
+            comment:
+              highMetadata.common.comment
+                ?.map((comment) => comment.text)
+                .filter(Boolean)
+                .join(" · ") ?? "",
+          },
+          saveState: "ready",
+          errorMessage: "",
+        });
+      }
+
+      setItems(nextItems);
       setAnalysisState("ready");
-    } catch {
+    } catch (error) {
       if (analysisIdRef.current !== analysisId) return;
+      clearMediaUrls();
       setAnalysisState("error");
-      setSelectedFile(null);
-      setErrorMessage("无法解析这份音频文件，请检查文件是否完整或尝试其他格式");
+      setGlobalError(
+        error instanceof Error ? error.message : "无法分析这些歌曲文件夹",
+      );
     }
   }
 
   function handleInputChange(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.currentTarget.files?.[0];
-    if (file) void analyzeMusicFile(file);
+    const entries = Array.from(event.currentTarget.files ?? []).map((file) => ({
+      file,
+      relativePath: file.webkitRelativePath || file.name,
+    }));
+    void analyzeMusicFolders(entries);
   }
 
-  function handleDrop(event: DragEvent<HTMLButtonElement>) {
+  async function handleDrop(event: DragEvent<HTMLButtonElement>) {
     event.preventDefault();
     setIsDragging(false);
-    const file = event.dataTransfer.files?.[0];
-    if (file) void analyzeMusicFile(file);
+    try {
+      await analyzeMusicFolders(await getDroppedFiles(event.dataTransfer));
+    } catch {
+      setAnalysisState("error");
+      setGlobalError("无法读取拖放的文件夹，请改用“选择文件夹”");
+    }
   }
 
-  function updateDraft(field: keyof MusicDraft, value: string) {
-    setDraft((currentDraft) =>
-      currentDraft ? { ...currentDraft, [field]: value } : currentDraft,
+  async function togglePreview(itemIndex: number, version: AudioVersion) {
+    const audio = audioRef.current;
+    const item = items[itemIndex];
+    if (!audio || !item) return;
+
+    const isCurrentPreview =
+      activePreview?.itemIndex === itemIndex &&
+      activePreview.version === version;
+    if (isCurrentPreview && !audio.paused) {
+      audio.pause();
+      return;
+    }
+
+    if (!isCurrentPreview) {
+      audio.pause();
+      audio.src = version === "high" ? item.highUrl : item.lowUrl;
+      audio.load();
+      setActivePreview({ itemIndex, version });
+      setPreviewCurrentTime(0);
+      setPreviewDuration(
+        (version === "high" ? item.high : item.low).durationSeconds ?? 0,
+      );
+    }
+
+    setPreviewError("");
+    try {
+      await audio.play();
+    } catch {
+      setPreviewError("浏览器无法播放这个音频格式，请下载后检查");
+      setPreviewIsPlaying(false);
+    }
+  }
+
+  function seekPreview(value: number) {
+    const audio = audioRef.current;
+    if (!audio || !Number.isFinite(value)) return;
+    audio.currentTime = value;
+    setPreviewCurrentTime(value);
+  }
+
+  function updateDraft(
+    itemIndex: number,
+    field: keyof MusicDraft,
+    value: string,
+  ) {
+    setItems((currentItems) =>
+      currentItems.map((item, index) =>
+        index === itemIndex
+          ? {
+              ...item,
+              draft: { ...item.draft, [field]: value },
+              saveState: item.saveState === "saved" ? "ready" : item.saveState,
+              errorMessage: "",
+            }
+          : item,
+      ),
     );
-    setSaveState("idle");
   }
 
-  function handleSave() {
-    if (!selectedFile || !draft || !draftIsValid) return;
+  function draftIsValid(draft: MusicDraft) {
+    const bpmIsValid =
+      !draft.bpm ||
+      (Number.isFinite(Number(draft.bpm)) &&
+        Number(draft.bpm) >= 1 &&
+        Number(draft.bpm) <= 300);
+    const yearIsValid =
+      !draft.year ||
+      (Number.isInteger(Number(draft.year)) &&
+        Number(draft.year) >= 1900 &&
+        Number(draft.year) <= 2100);
+    return Boolean(draft.title.trim() && bpmIsValid && yearIsValid);
+  }
 
-    const formData = new FormData();
-    formData.set("file", selectedFile);
-    formData.set("draft", JSON.stringify(draft));
-    setSaveState("idle");
-    setErrorMessage("");
+  function handleSaveAll() {
+    if (items.some((item) => !draftIsValid(item.draft))) return;
 
     startSaving(async () => {
-      const result = await saveMusicDraft(formData);
-      if (result.ok) {
-        setSaveState("success");
-        router.refresh();
-      } else {
-        setSaveState("error");
-        setErrorMessage(result.message);
+      for (let index = 0; index < items.length; index += 1) {
+        const item = items[index];
+        if (item.saveState === "saved") continue;
+
+        setItems((currentItems) =>
+          currentItems.map((currentItem, currentIndex) =>
+            currentIndex === index
+              ? { ...currentItem, saveState: "saving", errorMessage: "" }
+              : currentItem,
+          ),
+        );
+
+        const formData = new FormData();
+        formData.set("folderName", item.folder.folderName);
+        formData.set("highFile", item.folder.highFile);
+        formData.set("lowFile", item.folder.lowFile);
+        formData.set("coverFile", item.folder.coverFile);
+        formData.set("draft", JSON.stringify(item.draft));
+        const result = await saveMusicDraft(formData);
+
+        setItems((currentItems) =>
+          currentItems.map((currentItem, currentIndex) =>
+            currentIndex === index
+              ? {
+                  ...currentItem,
+                  saveState: result.ok ? "saved" : "error",
+                  errorMessage: result.ok ? "" : result.message,
+                }
+              : currentItem,
+          ),
+        );
       }
+
+      router.refresh();
     });
   }
 
-  const bpmIsValid =
-    !draft?.bpm ||
-    (Number.isFinite(Number(draft.bpm)) &&
-      Number(draft.bpm) >= 1 &&
-      Number(draft.bpm) <= 300);
-  const yearIsValid =
-    !draft?.year ||
-    (Number.isInteger(Number(draft.year)) &&
-      Number(draft.year) >= 1900 &&
-      Number(draft.year) <= 2100);
-  const draftIsValid = Boolean(
-    draft?.title.trim() && bpmIsValid && yearIsValid,
-  );
+  const savedCount = items.filter((item) => item.saveState === "saved").length;
+  const allDraftsValid = items.every((item) => draftIsValid(item.draft));
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -284,25 +549,39 @@ export function MusicUploadDialog() {
         <Upload aria-hidden="true" />
         导入歌曲
       </DialogTrigger>
-      <DialogContent className="max-h-[calc(100vh-2rem)] overflow-y-auto p-0 sm:max-w-3xl">
+      <DialogContent className="max-h-[calc(100vh-2rem)] overflow-y-auto p-0 sm:max-w-4xl">
         <DialogHeader className="border-b px-6 py-5 pr-14">
-          <DialogTitle className="text-xl">导入音乐</DialogTitle>
+          <DialogTitle className="text-xl">批量导入歌曲文件夹</DialogTitle>
           <DialogDescription>
-            选择音乐文件，分析并确认 Tag 后保存到本地曲库。
+            每个歌曲文件夹必须包含 __h 高清音频、__l.ogg 低清音频和 PNG/JPEG 封面。
           </DialogDescription>
         </DialogHeader>
 
         <div className="grid gap-5 px-6 py-1">
           <input
-            ref={inputRef}
+            ref={setDirectoryInput}
+            multiple
             className="hidden"
             type="file"
-            accept="audio/*,.aac,.aiff,.flac,.m4a,.mp3,.ogg,.opus,.wav"
             onChange={handleInputChange}
+          />
+          <audio
+            ref={audioRef}
+            className="hidden"
+            onDurationChange={(event) => {
+              const duration = event.currentTarget.duration;
+              if (Number.isFinite(duration)) setPreviewDuration(duration);
+            }}
+            onEnded={() => setPreviewIsPlaying(false)}
+            onPause={() => setPreviewIsPlaying(false)}
+            onPlay={() => setPreviewIsPlaying(true)}
+            onTimeUpdate={(event) =>
+              setPreviewCurrentTime(event.currentTarget.currentTime)
+            }
           />
           <button
             type="button"
-            className={`flex min-h-52 w-full flex-col items-center justify-center rounded-xl border-2 border-dashed px-6 py-8 text-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+            className={`flex min-h-36 w-full flex-col items-center justify-center rounded-xl border-2 border-dashed px-6 py-6 text-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
               isDragging
                 ? "border-lime-500 bg-lime-50"
                 : "border-zinc-300 bg-zinc-50 hover:border-zinc-400 hover:bg-zinc-100"
@@ -317,154 +596,217 @@ export function MusicUploadDialog() {
             onDrop={handleDrop}
           >
             {analysisState === "analyzing" ? (
-              <LoaderCircle className="size-9 animate-spin text-zinc-500" aria-hidden="true" />
+              <LoaderCircle className="size-8 animate-spin text-zinc-500" aria-hidden="true" />
             ) : (
-              <FileAudio className="size-9 text-zinc-500" aria-hidden="true" />
+              <FolderOpen className="size-8 text-zinc-500" aria-hidden="true" />
             )}
-            <strong className="mt-4 text-base">
-              {analysisState === "analyzing" ? "正在读取文件与 Tag…" : "拖放音乐文件到这里"}
+            <strong className="mt-3 text-base">
+              {analysisState === "analyzing"
+                ? "正在逐个分析歌曲文件夹…"
+                : "选择批量根目录或拖放多个歌曲文件夹"}
             </strong>
             <span className="mt-2 text-sm text-zinc-500">
-              或点击选择 · 单文件 · 最大 200 MB
-            </span>
-            <span className="mt-1 text-xs text-zinc-400">
-              MP3 / M4A / AAC / WAV / FLAC / OGG / OPUS / AIFF
+              song/song__h.flac · song/song__l.ogg · song/cover.jpg
             </span>
           </button>
 
-          <div aria-live="polite">
-            {analysisState === "idle" && (
-              <p className="rounded-lg bg-zinc-50 px-4 py-3 text-sm text-zinc-500">
-                选择文件后将分析格式、时长、码率、封面和内嵌 Tag。
-              </p>
-            )}
+          {analysisState === "idle" && (
+            <p className="rounded-lg bg-zinc-50 px-4 py-3 text-sm text-zinc-500">
+              可以直接选择单个歌曲文件夹，也可以选择包含多个歌曲子文件夹的根目录。
+            </p>
+          )}
 
-            {analysisState === "error" && (
-              <div className="flex gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-                <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-                <p>{errorMessage}</p>
-              </div>
-            )}
+          {analysisState === "error" && (
+            <div className="flex gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+              <p>{globalError}</p>
+            </div>
+          )}
 
-            {analysisState === "ready" && analysis && (
-              <section aria-labelledby="analysis-title" className="grid gap-4">
-                <div className="flex items-center justify-between gap-4">
-                  <div>
-                    <h2 className="font-medium" id="analysis-title">
-                      分析结果
-                    </h2>
-                    <p className="mt-1 text-xs text-zinc-500">
-                      共读取 {analysis.nativeTagCount} 个原始 Tag
-                    </p>
-                  </div>
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-800">
-                    <CheckCircle2 className="size-3.5" aria-hidden="true" />
-                    分析完成
-                  </span>
+          {analysisState === "ready" && (
+            <section className="grid gap-3" aria-label="批量歌曲分析结果">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <h2 className="font-medium">已识别 {items.length} 个歌曲文件夹</h2>
+                  <p className="mt-1 text-xs text-zinc-500">
+                    点击歌曲可以展开并修改从高清版读取的 Tag。
+                  </p>
                 </div>
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-800">
+                  <CheckCircle2 className="size-3.5" aria-hidden="true" />
+                  结构校验通过
+                </span>
+              </div>
 
-                <div className="rounded-xl border bg-zinc-50 p-4">
-                  <div className="flex min-w-0 gap-4">
-                    {analysis.coverUrl ? (
+              {items.map((item, itemIndex) => {
+                const activeVersion =
+                  activePreview?.itemIndex === itemIndex
+                    ? activePreview.version
+                    : null;
+                const bpmIsValid =
+                  !item.draft.bpm ||
+                  (Number.isFinite(Number(item.draft.bpm)) &&
+                    Number(item.draft.bpm) >= 1 &&
+                    Number(item.draft.bpm) <= 300);
+                const yearIsValid =
+                  !item.draft.year ||
+                  (Number.isInteger(Number(item.draft.year)) &&
+                    Number(item.draft.year) >= 1900 &&
+                    Number(item.draft.year) <= 2100);
+
+                return (
+                  <details
+                    className="group overflow-hidden rounded-xl border bg-zinc-50"
+                    key={item.folder.folderPath}
+                  >
+                    <summary className="flex cursor-pointer list-none items-center gap-3 bg-white p-4 [&::-webkit-details-marker]:hidden">
                       <Image
                         unoptimized
-                        className="size-24 shrink-0 rounded-lg object-cover"
-                        src={analysis.coverUrl}
-                        alt="音频内嵌封面"
-                        width={96}
-                        height={96}
+                        className="size-12 shrink-0 rounded-lg object-cover"
+                        src={item.coverUrl}
+                        alt={`${item.draft.title} 封面`}
+                        width={48}
+                        height={48}
                       />
-                    ) : (
-                      <span className="flex size-24 shrink-0 items-center justify-center rounded-lg bg-zinc-200 text-zinc-500">
-                        <Music2 className="size-7" aria-hidden="true" />
+                      <span className="min-w-0 flex-1">
+                        <strong className="block truncate text-sm font-medium">
+                          {item.draft.title || item.folder.baseName}
+                        </strong>
+                        <span className="mt-1 block truncate text-xs text-zinc-500">
+                          {item.folder.folderPath} · 高清 Tag {item.nativeTagCount} 个
+                        </span>
                       </span>
-                    )}
-                    <div className="min-w-0 self-center">
-                      <p className="truncate font-medium">{analysis.fileName}</p>
-                      <p className="mt-2 text-sm text-zinc-500">
-                        {analysis.format} · {analysis.duration} · {analysis.fileSize}
-                      </p>
-                      <p className="mt-1 text-xs text-zinc-400">
-                        {analysis.bitrate} · {analysis.sampleRate} · {analysis.channels}
-                      </p>
-                    </div>
-                  </div>
+                      <span className="text-xs font-medium text-zinc-500">
+                        {item.saveState === "saving"
+                          ? "正在保存…"
+                          : item.saveState === "saved"
+                            ? "已保存"
+                            : item.saveState === "error"
+                              ? "保存失败"
+                              : "待保存"}
+                      </span>
+                    </summary>
 
-                  {draft && (
-                    <div className="mt-4 border-t pt-4">
-                      <div className="mb-4 flex items-center justify-between gap-4">
-                        <div>
-                          <h3 className="text-sm font-medium">导入草稿</h3>
-                          <p className="mt-1 text-xs text-zinc-500">
-                            Tag 已自动填入，可以在当前窗体中修正。
-                          </p>
-                        </div>
-                        {saveState === "success" && (
-                          <span className="text-xs font-medium text-emerald-700">
-                            已保存到本地曲库
-                          </span>
-                        )}
+                    <div className="grid gap-4 border-t p-4">
+                      <div className="grid gap-3 lg:grid-cols-2">
+                        <VersionAnalysisCard
+                          analysis={item.high}
+                          isActive={activeVersion === "high"}
+                          isPlaying={previewIsPlaying}
+                          label="高清版"
+                          onTogglePreview={() =>
+                            void togglePreview(itemIndex, "high")
+                          }
+                        />
+                        <VersionAnalysisCard
+                          analysis={item.low}
+                          isActive={activeVersion === "low"}
+                          isPlaying={previewIsPlaying}
+                          label="低清版 OGG"
+                          onTogglePreview={() =>
+                            void togglePreview(itemIndex, "low")
+                          }
+                        />
                       </div>
+
+                      {activeVersion && (
+                        <div className="flex flex-wrap items-center gap-3 rounded-lg border bg-white px-3 py-2">
+                          <Button
+                            type="button"
+                            size="icon-sm"
+                            variant="outline"
+                            aria-label={previewIsPlaying ? "暂停试听" : "继续试听"}
+                            onClick={() =>
+                              void togglePreview(itemIndex, activeVersion)
+                            }
+                          >
+                            {previewIsPlaying ? (
+                              <Pause aria-hidden="true" />
+                            ) : (
+                              <Play aria-hidden="true" />
+                            )}
+                          </Button>
+                          <span className="text-xs font-medium text-zinc-600">
+                            {activeVersion === "high" ? "高清版" : "低清版 OGG"}
+                          </span>
+                          <input
+                            className="h-2 min-w-40 flex-1 cursor-pointer accent-zinc-900"
+                            type="range"
+                            min="0"
+                            max={previewDuration || 0}
+                            step="0.1"
+                            value={Math.min(
+                              previewCurrentTime,
+                              previewDuration || 0,
+                            )}
+                            aria-label="试听进度"
+                            onChange={(event) =>
+                              seekPreview(Number(event.currentTarget.value))
+                            }
+                          />
+                          <span className="tabular-nums text-xs text-zinc-500">
+                            {formatDuration(previewCurrentTime)} / {formatDuration(previewDuration)}
+                          </span>
+                          {previewError && (
+                            <p className="basis-full text-xs text-red-600">
+                              {previewError}
+                            </p>
+                          )}
+                        </div>
+                      )}
 
                       <div className="grid gap-4 sm:grid-cols-2">
                         <div className="grid gap-2">
-                          <Label htmlFor="draft-title">标题 *</Label>
+                          <Label htmlFor={`batch-title-${itemIndex}`}>标题 *</Label>
                           <Input
-                            id="draft-title"
-                            value={draft.title}
-                            aria-invalid={!draft.title.trim()}
-                            placeholder="未读取到 TITLE，请补充"
+                            id={`batch-title-${itemIndex}`}
+                            value={item.draft.title}
+                            aria-invalid={!item.draft.title.trim()}
                             onChange={(event) =>
-                              updateDraft("title", event.currentTarget.value)
-                            }
-                          />
-                          {!draft.title.trim() && (
-                            <p className="text-xs text-red-600">标题为必填字段</p>
-                          )}
-                        </div>
-                        <div className="grid gap-2">
-                          <Label htmlFor="draft-artist">作者</Label>
-                          <Input
-                            id="draft-artist"
-                            value={draft.artist}
-                            placeholder="未读取到 ARTIST"
-                            onChange={(event) =>
-                              updateDraft("artist", event.currentTarget.value)
+                              updateDraft(itemIndex, "title", event.currentTarget.value)
                             }
                           />
                         </div>
                         <div className="grid gap-2">
-                          <Label htmlFor="draft-album">专辑</Label>
+                          <Label htmlFor={`batch-artist-${itemIndex}`}>作者</Label>
                           <Input
-                            id="draft-album"
-                            value={draft.album}
-                            placeholder="未读取到 ALBUM"
+                            id={`batch-artist-${itemIndex}`}
+                            value={item.draft.artist}
                             onChange={(event) =>
-                              updateDraft("album", event.currentTarget.value)
+                              updateDraft(itemIndex, "artist", event.currentTarget.value)
                             }
                           />
                         </div>
                         <div className="grid gap-2">
-                          <Label htmlFor="draft-genres">风格</Label>
+                          <Label htmlFor={`batch-album-${itemIndex}`}>专辑</Label>
                           <Input
-                            id="draft-genres"
-                            value={draft.genres}
+                            id={`batch-album-${itemIndex}`}
+                            value={item.draft.album}
+                            onChange={(event) =>
+                              updateDraft(itemIndex, "album", event.currentTarget.value)
+                            }
+                          />
+                        </div>
+                        <div className="grid gap-2">
+                          <Label htmlFor={`batch-genres-${itemIndex}`}>风格</Label>
+                          <Input
+                            id={`batch-genres-${itemIndex}`}
+                            value={item.draft.genres}
                             placeholder="多个值使用逗号分隔"
                             onChange={(event) =>
-                              updateDraft("genres", event.currentTarget.value)
+                              updateDraft(itemIndex, "genres", event.currentTarget.value)
                             }
                           />
                         </div>
                         <div className="grid gap-2">
-                          <Label htmlFor="draft-bpm">BPM</Label>
+                          <Label htmlFor={`batch-bpm-${itemIndex}`}>BPM</Label>
                           <Input
-                            id="draft-bpm"
+                            id={`batch-bpm-${itemIndex}`}
                             inputMode="numeric"
-                            value={draft.bpm}
+                            value={item.draft.bpm}
                             aria-invalid={!bpmIsValid}
-                            placeholder="1–300"
                             onChange={(event) =>
-                              updateDraft("bpm", event.currentTarget.value)
+                              updateDraft(itemIndex, "bpm", event.currentTarget.value)
                             }
                           />
                           {!bpmIsValid && (
@@ -472,26 +814,24 @@ export function MusicUploadDialog() {
                           )}
                         </div>
                         <div className="grid gap-2">
-                          <Label htmlFor="draft-mood">情绪</Label>
+                          <Label htmlFor={`batch-mood-${itemIndex}`}>情绪</Label>
                           <Input
-                            id="draft-mood"
-                            value={draft.mood}
-                            placeholder="例如：平静、专注"
+                            id={`batch-mood-${itemIndex}`}
+                            value={item.draft.mood}
                             onChange={(event) =>
-                              updateDraft("mood", event.currentTarget.value)
+                              updateDraft(itemIndex, "mood", event.currentTarget.value)
                             }
                           />
                         </div>
                         <div className="grid gap-2">
-                          <Label htmlFor="draft-year">年份</Label>
+                          <Label htmlFor={`batch-year-${itemIndex}`}>年份</Label>
                           <Input
-                            id="draft-year"
+                            id={`batch-year-${itemIndex}`}
                             inputMode="numeric"
-                            value={draft.year}
+                            value={item.draft.year}
                             aria-invalid={!yearIsValid}
-                            placeholder="1900–2100"
                             onChange={(event) =>
-                              updateDraft("year", event.currentTarget.value)
+                              updateDraft(itemIndex, "year", event.currentTarget.value)
                             }
                           />
                           {!yearIsValid && (
@@ -501,67 +841,64 @@ export function MusicUploadDialog() {
                           )}
                         </div>
                         <div className="grid gap-2 sm:col-span-2">
-                          <Label htmlFor="draft-comment">备注</Label>
+                          <Label htmlFor={`batch-comment-${itemIndex}`}>备注</Label>
                           <Textarea
-                            id="draft-comment"
-                            value={draft.comment}
-                            placeholder="未读取到 COMMENT"
+                            id={`batch-comment-${itemIndex}`}
+                            value={item.draft.comment}
                             onChange={(event) =>
-                              updateDraft("comment", event.currentTarget.value)
+                              updateDraft(itemIndex, "comment", event.currentTarget.value)
                             }
                           />
                         </div>
                       </div>
-                    </div>
-                  )}
 
-                  {analysis.warnings.length > 0 && (
-                    <div className="mt-4 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                      解析器提示：{analysis.warnings.join("；")}
+                      {item.warnings.length > 0 && (
+                        <div className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                          解析器提示：{item.warnings.join("；")}
+                        </div>
+                      )}
+                      {item.errorMessage && (
+                        <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+                          {item.errorMessage}
+                        </div>
+                      )}
                     </div>
-                  )}
-
-                  {saveState === "error" && (
-                    <div className="mt-4 flex gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-                      <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-                      <p>{errorMessage}</p>
-                    </div>
-                  )}
-                </div>
-              </section>
-            )}
-          </div>
+                  </details>
+                );
+              })}
+            </section>
+          )}
         </div>
 
         <DialogFooter className="mx-0 mb-0 px-6 py-4">
           <p className="mr-auto self-center text-xs text-zinc-500">
-            文件保存到服务器本地目录，不会上传到云端
+            {items.length > 0
+              ? `已保存 ${savedCount}/${items.length} 首，按歌曲顺序逐个写入`
+              : "每个歌曲文件夹独立保存"}
           </p>
-          <DialogClose render={<Button variant="outline" />}>取消</DialogClose>
+          <DialogClose render={<Button variant="outline" disabled={isSaving} />}>
+            关闭
+          </DialogClose>
           <Button
             type="button"
             variant="outline"
             disabled={analysisState === "analyzing" || isSaving}
             onClick={() => inputRef.current?.click()}
           >
-            {analysisState === "idle" ? "选择文件" : "重新选择"}
+            重新选择文件夹
           </Button>
           <Button
             type="button"
             disabled={
               analysisState !== "ready" ||
-              !draftIsValid ||
-              !selectedFile ||
+              items.length === 0 ||
+              !allDraftsValid ||
               isSaving ||
-              saveState === "success"
+              savedCount === items.length
             }
-            onClick={handleSave}
+            onClick={handleSaveAll}
           >
-            {isSaving
-              ? "正在保存…"
-              : saveState === "success"
-                ? "已保存"
-                : "保存到本地曲库"}
+            {isSaving ? "正在批量保存…" : `保存 ${items.length - savedCount} 首歌曲`}
           </Button>
         </DialogFooter>
       </DialogContent>

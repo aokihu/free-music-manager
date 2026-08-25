@@ -15,8 +15,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "FreeMusic Manager",
-  description: "FreeMusic 曲库与发布管理后台",
+  title: "Tingever Manager",
+  description: "Tingever 曲库与发布管理后台",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

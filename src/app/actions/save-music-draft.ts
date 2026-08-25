@@ -2,23 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 
-import {
-  saveMusicToCatalog,
-} from "@/lib/music-catalog/music-catalog-service";
+import { saveMusicToCatalog } from "@/lib/music-catalog/music-catalog-service";
 import { parseMusicDraft } from "@/lib/music-catalog/draft-validation";
-import { getTitleFromFileName } from "@/lib/music-file";
-
-const maxFileSizeBytes = 200 * 1024 * 1024;
-const supportedExtensions = new Set([
-  "aac",
-  "aiff",
-  "flac",
-  "m4a",
-  "mp3",
-  "ogg",
-  "opus",
-  "wav",
-]);
+import { parseMusicFolderFiles } from "@/lib/music-catalog/music-folder";
 
 export type SaveMusicDraftResult = {
   ok: boolean;
@@ -26,17 +12,8 @@ export type SaveMusicDraftResult = {
   trackId?: string;
 };
 
-function validateMusicFile(value: FormDataEntryValue | null) {
-  if (!(value instanceof File) || value.size === 0) {
-    throw new Error("请选择有效的音乐文件");
-  }
-  if (value.size > maxFileSizeBytes) throw new Error("单个文件不能超过 200 MB");
-
-  const extension = value.name.split(".").pop()?.toLowerCase() ?? "";
-  if (!value.type.startsWith("audio/") && !supportedExtensions.has(extension)) {
-    throw new Error("不支持这份音频文件的格式");
-  }
-
+function getMusicFile(value: FormDataEntryValue | null) {
+  if (!(value instanceof File)) throw new Error("缺少音乐文件");
   return value;
 }
 
@@ -44,12 +21,19 @@ export async function saveMusicDraft(
   formData: FormData,
 ): Promise<SaveMusicDraftResult> {
   try {
-    const file = validateMusicFile(formData.get("file"));
-    const draft = parseMusicDraft(
-      formData.get("draft"),
-      getTitleFromFileName(file.name),
+    const folderName = formData.get("folderName");
+    if (typeof folderName !== "string") throw new Error("缺少歌曲文件夹名称");
+    const folder = parseMusicFolderFiles(folderName, [
+      getMusicFile(formData.get("highFile")),
+      getMusicFile(formData.get("lowFile")),
+      getMusicFile(formData.get("coverFile")),
+    ]);
+    const draft = parseMusicDraft(formData.get("draft"), folder.baseName);
+    const track = await saveMusicToCatalog(
+      folder.folderName,
+      [folder.highFile, folder.lowFile, folder.coverFile],
+      draft,
     );
-    const track = await saveMusicToCatalog(file, draft);
     revalidatePath("/");
     return { ok: true, message: "歌曲已保存到本地曲库", trackId: track.id };
   } catch (error) {

@@ -1,8 +1,21 @@
 "use client";
 
-import { AlertCircle, FileAudio, Save } from "lucide-react";
+import {
+  AlertCircle,
+  ImagePlus,
+  Save,
+  Trash2,
+  Undo2,
+} from "lucide-react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useTransition,
+} from "react";
 
 import { updateMusicTrack } from "@/app/actions/update-music-track";
 import { Button } from "@/components/ui/button";
@@ -19,7 +32,10 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import type { ManagerTrack } from "@/lib/music-catalog/types";
+import type {
+  ManagerTrack,
+  StoredAudioFile,
+} from "@/lib/music-catalog/types";
 
 type EditableMusicDraft = {
   title: string;
@@ -31,6 +47,8 @@ type EditableMusicDraft = {
   year: string;
   comment: string;
 };
+
+const mediaPanelStyle = { height: "11rem" } as const;
 
 function createEditableDraft(track: ManagerTrack): EditableMusicDraft {
   return {
@@ -58,6 +76,33 @@ function formatDuration(seconds?: number) {
     .padStart(2, "0")}`;
 }
 
+function AudioFileSummary({
+  audio,
+  label,
+}: {
+  audio: StoredAudioFile;
+  label: string;
+}) {
+  return (
+    <li className="flex min-w-0 items-center px-4 py-3.5">
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <span className="shrink-0 text-xs font-medium text-zinc-500">
+            {label}
+          </span>
+          <p className="truncate text-sm font-medium">{audio.fileName}</p>
+        </div>
+        <p className="mt-1 text-xs text-zinc-500">
+          {audio.container ?? "未知格式"} · {formatDuration(audio.durationSeconds)} · {formatFileSize(audio.sizeBytes)}
+        </p>
+        <p className="mt-1 text-xs text-zinc-400">
+          {audio.bitrateKbps ? `${audio.bitrateKbps} kbps` : "未知码率"} · {audio.sampleRateHz ? `${audio.sampleRateHz / 1000} kHz` : "未知采样率"} · {audio.numberOfChannels ? `${audio.numberOfChannels} 声道` : "未知声道"}
+        </p>
+      </div>
+    </li>
+  );
+}
+
 export function MusicEditDialog({
   track,
   mobile = false,
@@ -66,9 +111,12 @@ export function MusicEditDialog({
   mobile?: boolean;
 }) {
   const router = useRouter();
+  const coverInputRef = useRef<HTMLInputElement>(null);
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState(() => createEditableDraft(track));
   const [savedDraft, setSavedDraft] = useState(() => createEditableDraft(track));
+  const [coverFile, setCoverFile] = useState<File | null>(null);
+  const [removeCover, setRemoveCover] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [saveSucceeded, setSaveSucceeded] = useState(false);
   const [isSaving, startSaving] = useTransition();
@@ -79,6 +127,8 @@ export function MusicEditDialog({
       const nextDraft = createEditableDraft(track);
       setDraft(nextDraft);
       setSavedDraft(nextDraft);
+      setCoverFile(null);
+      setRemoveCover(false);
       setErrorMessage("");
       setSaveSucceeded(false);
     }
@@ -101,7 +151,21 @@ export function MusicEditDialog({
       Number(draft.year) >= 1900 &&
       Number(draft.year) <= 2100);
   const draftIsValid = Boolean(draft.title.trim() && bpmIsValid && yearIsValid);
-  const hasUnsavedChanges = JSON.stringify(draft) !== JSON.stringify(savedDraft);
+  const hasUnsavedChanges =
+    JSON.stringify(draft) !== JSON.stringify(savedDraft) ||
+    Boolean(coverFile) ||
+    removeCover;
+  const coverPreviewUrl = useMemo(
+    () => (coverFile ? URL.createObjectURL(coverFile) : ""),
+    [coverFile],
+  );
+
+  useEffect(
+    () => () => {
+      if (coverPreviewUrl) URL.revokeObjectURL(coverPreviewUrl);
+    },
+    [coverPreviewUrl],
+  );
 
   function handleSave() {
     if (!draftIsValid || !hasUnsavedChanges) return;
@@ -109,11 +173,16 @@ export function MusicEditDialog({
     const formData = new FormData();
     formData.set("trackId", track.id);
     formData.set("draft", JSON.stringify(draft));
+    if (coverFile) formData.set("coverFile", coverFile);
+    if (removeCover) formData.set("removeCover", "true");
 
     startSaving(async () => {
       const result = await updateMusicTrack(formData);
       if (result.ok) {
         setSavedDraft(draft);
+        setCoverFile(null);
+        setRemoveCover(false);
+        if (coverInputRef.current) coverInputRef.current.value = "";
         setSaveSucceeded(true);
         router.refresh();
       } else {
@@ -139,25 +208,133 @@ export function MusicEditDialog({
         <DialogHeader className="border-b px-6 py-5 pr-14">
           <DialogTitle className="text-xl">编辑歌曲信息</DialogTitle>
           <DialogDescription>
-            只更新曲库元数据，不会修改或重新写入音频文件。
+            可更新歌曲封面和曲库元数据，不会修改或重新写入音频文件。
           </DialogDescription>
         </DialogHeader>
 
         <div className="grid gap-5 px-6 py-1">
-          <section className="rounded-xl border bg-zinc-50 p-4" aria-label="音频文件信息">
-            <div className="flex items-center gap-3">
-              <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-zinc-900 text-lime-300">
-                <FileAudio className="size-4" aria-hidden="true" />
-              </span>
-              <div className="min-w-0">
-                <p className="truncate text-sm font-medium">{track.audio.fileName}</p>
+          <section
+            className="grid gap-5 sm:grid-cols-2"
+            aria-label="歌曲封面和文件信息"
+          >
+            <div className="flex min-w-0 flex-col gap-3">
+              <div>
+                <h3 className="text-sm font-medium">歌曲封面</h3>
                 <p className="mt-1 text-xs text-zinc-500">
-                  {track.audio.container ?? "未知格式"} · {formatDuration(track.audio.durationSeconds)} · {formatFileSize(track.audio.sizeBytes)}
-                </p>
-                <p className="mt-1 text-xs text-zinc-400">
-                  {track.audio.bitrateKbps ? `${track.audio.bitrateKbps} kbps` : "未知码率"} · {track.audio.sampleRateHz ? `${track.audio.sampleRateHz / 1000} kHz` : "未知采样率"} · {track.audio.numberOfChannels ? `${track.audio.numberOfChannels} 声道` : "未知声道"}
+                  支持 PNG、JPG、JPEG，最大 20 MB。
                 </p>
               </div>
+              <div
+                className="group relative isolate w-full shrink-0 overflow-hidden rounded-xl bg-zinc-950 shadow-sm [clip-path:inset(0_round_0.75rem)]"
+                data-cover-editor
+                style={mediaPanelStyle}
+              >
+                <div className="absolute inset-0 overflow-hidden rounded-[inherit]">
+                  <Image
+                    alt={
+                      coverFile
+                        ? "新封面预览"
+                        : removeCover || !track.hasCover
+                          ? "歌曲封面占位图"
+                          : `${track.title} 的当前封面`
+                    }
+                    className="scale-[1.01] transform-gpu object-cover transition-[filter,transform] duration-200 group-hover:scale-[1.03] group-hover:blur-[2px]"
+                    fill
+                    sizes="(min-width: 640px) 340px, calc(100vw - 3rem)"
+                    src={
+                      coverPreviewUrl ||
+                      (removeCover || !track.hasCover
+                        ? "/cover-placeholder.png"
+                        : track.coverUrl)
+                    }
+                    unoptimized
+                  />
+                </div>
+                <div className="pointer-events-none absolute inset-0 flex items-center justify-center rounded-[inherit] bg-black/25 p-4 opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100">
+                  <div className="flex items-center gap-2 rounded-xl bg-black/15 p-1.5 shadow-sm backdrop-blur-sm">
+                    <Button
+                      className="rounded-lg bg-white/95 px-4 text-zinc-950 hover:bg-white"
+                      size="sm"
+                      type="button"
+                      variant="secondary"
+                      onClick={() => coverInputRef.current?.click()}
+                    >
+                      <ImagePlus aria-hidden="true" />
+                      替换
+                    </Button>
+                    <Button
+                      className={
+                        removeCover
+                          ? "rounded-lg bg-white/95 px-4 text-zinc-950 hover:bg-white"
+                          : "rounded-lg bg-red-600 px-4 text-white shadow-sm hover:bg-red-700 focus-visible:border-red-400 focus-visible:ring-red-600/30 dark:bg-red-600 dark:hover:bg-red-700"
+                      }
+                      disabled={!removeCover && !track.hasCover && !coverFile}
+                      size="sm"
+                      type="button"
+                      variant={removeCover ? "secondary" : "destructive"}
+                      onClick={() => {
+                        if (removeCover) {
+                          setRemoveCover(false);
+                          setErrorMessage("");
+                          setSaveSucceeded(false);
+                          return;
+                        }
+                        setCoverFile(null);
+                        setRemoveCover(true);
+                        setErrorMessage("");
+                        setSaveSucceeded(false);
+                        if (coverInputRef.current) {
+                          coverInputRef.current.value = "";
+                        }
+                      }}
+                    >
+                      {removeCover ? (
+                        <Undo2 aria-hidden="true" />
+                      ) : (
+                        <Trash2 aria-hidden="true" />
+                      )}
+                      {removeCover ? "撤销" : "删除"}
+                    </Button>
+                  </div>
+                </div>
+                <div className="pointer-events-none absolute inset-0 rounded-[inherit] ring-1 ring-inset ring-black/15" />
+                <Input
+                  accept="image/png,image/jpeg,.png,.jpg,.jpeg"
+                  className="sr-only"
+                  id={`edit-cover-${track.id}`}
+                  ref={coverInputRef}
+                  type="file"
+                  onChange={(event) => {
+                    setCoverFile(event.currentTarget.files?.[0] ?? null);
+                    setRemoveCover(false);
+                    setErrorMessage("");
+                    setSaveSucceeded(false);
+                  }}
+                />
+              </div>
+              {(coverFile || removeCover) && (
+                <p className="truncate text-xs text-zinc-500">
+                  {coverFile
+                    ? `待替换：${coverFile.name}`
+                    : "保存后将删除当前封面"}
+                </p>
+              )}
+            </div>
+
+            <div className="flex min-w-0 flex-col gap-3">
+              <div>
+                <h3 className="text-sm font-medium">歌曲文件</h3>
+                <p className="mt-1 text-xs text-zinc-500">
+                  音频文件仅供查看，编辑时不会重新写入。
+                </p>
+              </div>
+              <ul
+                className="grid grid-rows-2 divide-y overflow-hidden rounded-xl border bg-zinc-50"
+                style={mediaPanelStyle}
+              >
+                <AudioFileSummary audio={track.audio.high} label="高清版" />
+                <AudioFileSummary audio={track.audio.low} label="低清版" />
+              </ul>
             </div>
           </section>
 

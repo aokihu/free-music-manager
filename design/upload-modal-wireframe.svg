@@ -1,10 +1,11 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1440" height="900" viewBox="0 0 1440 900">
   <style>
-    text { font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif; fill: #20241f; }
-    .label { font-size: 14px; fill: #747a72; }
-    .body { font-size: 16px; }
+    text { font-family: Inter, -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif; fill: #20241f; }
+    .label { font-size: 13px; fill: #747a72; }
+    .body { font-size: 15px; }
     .title { font-size: 24px; font-weight: 700; }
     .small { font-size: 12px; fill: #777d75; }
+    .strong { font-size: 14px; font-weight: 700; }
   </style>
   <rect width="1440" height="900" fill="#f4f5f2"/>
   <rect width="240" height="900" fill="#171a17"/>
@@ -18,44 +19,70 @@
   <rect x="280" y="120" width="1120" height="690" rx="16" fill="#fff" stroke="#d6d9d3"/>
 
   <rect width="1440" height="900" fill="#111" opacity="0.42"/>
-  <rect x="330" y="90" width="780" height="720" rx="18" fill="#fff"/>
-  <text x="370" y="142" class="title">导入音乐</text>
-  <text x="370" y="170" class="label">选择一首音乐文件，本地分析文件与 Tag 信息</text>
-  <circle cx="1064" cy="136" r="18" fill="#f0f1ee"/>
-  <text x="1058" y="142" class="body">×</text>
-  <line x1="330" y1="194" x2="1110" y2="194" stroke="#e3e5e0"/>
+  <rect x="250" y="48" width="940" height="804" rx="18" fill="#fff"/>
+  <text x="290" y="99" class="title">批量导入歌曲文件夹</text>
+  <text x="290" y="127" class="label">一个文件夹代表一首歌曲，系统先分析文件结构和高清版 Tag</text>
+  <circle cx="1144" cy="92" r="18" fill="#f0f1ee"/>
+  <text x="1138" y="98" class="body">×</text>
+  <line x1="250" y1="150" x2="1190" y2="150" stroke="#e3e5e0"/>
 
-  <rect x="370" y="226" width="700" height="190" rx="14" fill="#fafbf8" stroke="#a7aca4" stroke-width="2" stroke-dasharray="8 8"/>
-  <circle cx="720" cy="280" r="24" fill="#e7e9e4"/>
-  <text x="690" y="330" class="body">拖放音乐文件到这里</text>
-  <text x="663" y="357" class="small">或点击选择 · 单文件 · MP3 / M4A / WAV / FLAC / OGG</text>
-  <rect x="658" y="375" width="124" height="32" rx="7" fill="#20241f"/>
-  <text x="682" y="396" fill="#fff" font-size="13">选择文件</text>
+  <rect x="290" y="176" width="860" height="138" rx="14" fill="#fafbf8" stroke="#a7aca4" stroke-width="2" stroke-dasharray="8 8"/>
+  <text x="654" y="211" class="strong">拖放一个或多个歌曲文件夹</text>
+  <text x="465" y="240" class="small">每个文件夹：name__h.高音质格式 + name__l.ogg + cover.png / jpg / jpeg</text>
+  <text x="574" y="263" class="small">也可以选择一个包含多首歌曲子文件夹的根目录</text>
+  <rect x="658" y="278" width="124" height="30" rx="7" fill="#20241f"/>
+  <text x="682" y="298" fill="#fff" font-size="13">选择文件夹</text>
 
-  <text x="370" y="462" font-size="16" font-weight="700">分析结果</text>
-  <rect x="370" y="482" width="700" height="222" rx="12" fill="#f8f9f6" stroke="#e0e2dd"/>
-  <rect x="392" y="504" width="94" height="94" rx="9" fill="#d9dcd6"/>
-  <text x="409" y="557" class="small">内嵌封面</text>
-  <text x="510" y="524" class="label">文件</text>
-  <text x="510" y="549" class="body">rain-afterglow.mp3</text>
-  <text x="510" y="578" class="small">MP3 · 03:12 · 8.4 MB · 320 kbps</text>
-  <line x1="392" y1="618" x2="1048" y2="618" stroke="#e0e2dd"/>
-  <text x="392" y="646" class="label">TITLE</text>
-  <text x="480" y="646" class="body">雨后回声</text>
-  <text x="690" y="646" class="label">ARTIST</text>
-  <text x="780" y="646" class="body">FreeMusic AI</text>
-  <text x="392" y="678" class="label">GENRE</text>
-  <rect x="480" y="660" width="60" height="26" rx="13" fill="#e8ebE5"/>
-  <text x="496" y="678" class="small">氛围</text>
-  <rect x="548" y="660" width="74" height="26" rx="13" fill="#e8ebe5"/>
-  <text x="562" y="678" class="small">轻电子</text>
-  <text x="690" y="678" class="label">BPM</text>
-  <text x="780" y="678" class="body">92</text>
+  <text x="290" y="354" class="strong">已识别 3 首歌曲</text>
+  <text x="1028" y="354" class="small">2 就绪 · 1 分析中</text>
 
-  <line x1="330" y1="738" x2="1110" y2="738" stroke="#e3e5e0"/>
-  <text x="370" y="776" class="small">当前只在浏览器本地分析，不会保存或上传到云端</text>
-  <rect x="914" y="754" width="76" height="38" rx="8" fill="#f2f3f0" stroke="#d4d7d1"/>
-  <text x="938" y="778" class="label">取消</text>
-  <rect x="1000" y="754" width="70" height="38" rx="8" fill="#20241f"/>
-  <text x="1022" y="778" fill="#fff" font-size="14">完成</text>
+  <rect x="290" y="372" width="860" height="72" rx="11" fill="#f8f9f6" stroke="#dfe2dc"/>
+  <rect x="306" y="388" width="40" height="40" rx="6" fill="#d9dcd6"/>
+  <text x="362" y="400" class="strong">雨后回声</text>
+  <text x="362" y="423" class="small">rain-afterglow__h.flac · rain-afterglow__l.ogg</text>
+  <rect x="927" y="392" width="58" height="24" rx="12" fill="#e7eadf"/>
+  <text x="945" y="409" class="small">就绪</text>
+  <text x="1111" y="413" class="body">⌃</text>
+
+  <rect x="306" y="458" width="828" height="184" rx="9" fill="#fff" stroke="#e3e5e0"/>
+  <text x="326" y="486" class="label">高清版</text>
+  <text x="402" y="486" class="body">FLAC · 03:12 · 48.2 MB</text>
+  <text x="706" y="486" class="label">低清预览</text>
+  <text x="800" y="486" class="body">OGG · 03:12 · 2.1 MB</text>
+  <text x="326" y="520" class="label">歌曲标题</text>
+  <rect x="402" y="500" width="246" height="34" rx="6" fill="#f8f9f6" stroke="#dfe2dc"/>
+  <text x="414" y="522" class="body">雨后回声</text>
+  <text x="674" y="520" class="label">艺术家</text>
+  <rect x="742" y="500" width="242" height="34" rx="6" fill="#f8f9f6" stroke="#dfe2dc"/>
+  <text x="754" y="522" class="body">FreeMusic AI</text>
+  <text x="326" y="562" class="label">专辑</text>
+  <rect x="402" y="542" width="246" height="34" rx="6" fill="#f8f9f6" stroke="#dfe2dc"/>
+  <text x="414" y="564" class="small">未填写</text>
+  <text x="674" y="562" class="label">风格 / BPM</text>
+  <rect x="766" y="542" width="218" height="34" rx="6" fill="#f8f9f6" stroke="#dfe2dc"/>
+  <text x="778" y="564" class="body">氛围, 轻电子 · 92</text>
+  <rect x="326" y="594" width="34" height="34" rx="6" fill="#d9dcd6"/>
+  <text x="370" y="616" class="small">cover.png · PNG · 1.4 MB</text>
+
+  <rect x="290" y="654" width="860" height="62" rx="11" fill="#f8f9f6" stroke="#dfe2dc"/>
+  <rect x="306" y="665" width="40" height="40" rx="6" fill="#d9dcd6"/>
+  <text x="362" y="680" class="strong">晨雾漫游</text>
+  <text x="362" y="700" class="small">morning-mist__h.wav · morning-mist__l.ogg</text>
+  <rect x="927" y="673" width="58" height="24" rx="12" fill="#e7eadf"/>
+  <text x="945" y="690" class="small">就绪</text>
+  <text x="1111" y="692" class="body">⌄</text>
+
+  <rect x="290" y="728" width="860" height="62" rx="11" fill="#f8f9f6" stroke="#dfe2dc"/>
+  <rect x="306" y="739" width="40" height="40" rx="6" fill="#d9dcd6"/>
+  <text x="362" y="754" class="strong">微光流动</text>
+  <text x="362" y="774" class="small">分析高清版 Tag 与音频时长…</text>
+  <rect x="915" y="747" width="70" height="24" rx="12" fill="#f3ead0"/>
+  <text x="929" y="764" class="small">分析中</text>
+
+  <line x1="250" y1="812" x2="1190" y2="812" stroke="#e3e5e0"/>
+  <text x="290" y="839" class="small">保存时逐首处理；某首失败不会中断其他歌曲</text>
+  <rect x="976" y="822" width="78" height="38" rx="8" fill="#f2f3f0" stroke="#d4d7d1"/>
+  <text x="1001" y="846" class="label">取消</text>
+  <rect x="1064" y="822" width="86" height="38" rx="8" fill="#20241f"/>
+  <text x="1085" y="846" fill="#fff" font-size="14">保存 3 首</text>
 </svg>

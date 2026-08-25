@@ -41,7 +41,7 @@ const transitionContent: Record<
   },
   published: {
     label: "确认发布",
-    description: "歌曲会标记为已发布，为后续前台发布包提供依据。",
+    description: "歌曲会标记为已发布，并可以通过公开曲库 API 读取。",
   },
   offline: {
     label: "确认下架",
