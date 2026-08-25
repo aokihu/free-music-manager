@@ -27,8 +27,8 @@
     {
       "binding": "MUSIC_DB",
       "database_name": "freemusic-catalog",
+      "database_id": "a2c977bd-6f5b-4a82-ad34-452cd0caca16",
       "migrations_dir": "migrations"
-      // 正式部署前使用 `wrangler d1 create` 生成并补充 database_id。
     }
   ],
   "observability": {

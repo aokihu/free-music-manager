@@ -20,7 +20,6 @@ import {
   useTransition,
 } from "react";
 
-import { saveMusicDraft } from "@/app/actions/save-music-draft";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -78,6 +77,46 @@ type UploadBatchSize = {
   coverBytes: number;
   totalBytes: number;
 };
+
+type UploadMusicDraftResult = {
+  ok: boolean;
+  message: string;
+  trackId?: string;
+};
+
+function uploadMusicDraft(
+  formData: FormData,
+  onProgress: (percent: number) => void,
+): Promise<UploadMusicDraftResult> {
+  return new Promise((resolve) => {
+    const request = new XMLHttpRequest();
+    request.open("POST", "/api/manager/tracks");
+    request.responseType = "json";
+    request.upload.addEventListener("progress", (event) => {
+      if (!event.lengthComputable) return;
+      onProgress(Math.round((event.loaded / event.total) * 100));
+    });
+    request.addEventListener("load", () => {
+      const result = request.response as UploadMusicDraftResult | null;
+      if (result && typeof result.ok === "boolean") {
+        resolve(
+          request.status >= 200 && request.status < 300
+            ? result
+            : { ...result, ok: false },
+        );
+        return;
+      }
+      resolve({ ok: false, message: "上传失败，请稍后重试" });
+    });
+    request.addEventListener("error", () => {
+      resolve({ ok: false, message: "网络连接中断，请重新上传" });
+    });
+    request.addEventListener("abort", () => {
+      resolve({ ok: false, message: "上传已取消" });
+    });
+    request.send(formData);
+  });
+}
 
 type BatchMusicItem = {
   folder: MusicFolder;
@@ -265,6 +304,7 @@ export function MusicUploadDialog() {
   const [previewDuration, setPreviewDuration] = useState(0);
   const [previewError, setPreviewError] = useState("");
   const [previewIsPlaying, setPreviewIsPlaying] = useState(false);
+  const [uploadPercent, setUploadPercent] = useState(0);
   const [isSaving, startSaving] = useTransition();
 
   useEffect(
@@ -310,6 +350,7 @@ export function MusicUploadDialog() {
     setItems([]);
     setGlobalError("");
     setIsDragging(false);
+    setUploadPercent(0);
     if (inputRef.current) inputRef.current.value = "";
   }
 
@@ -548,7 +589,8 @@ export function MusicUploadDialog() {
         formData.set("lowFile", item.folder.lowFile);
         formData.set("coverFile", item.folder.coverFile);
         formData.set("draft", JSON.stringify(item.draft));
-        const result = await saveMusicDraft(formData);
+        setUploadPercent(0);
+        const result = await uploadMusicDraft(formData, setUploadPercent);
 
         setItems((currentItems) =>
           currentItems.map((currentItem, currentIndex) =>
@@ -919,19 +961,35 @@ export function MusicUploadDialog() {
           </Button>
           <Button
             type="button"
+            className={isSaving ? "hidden" : undefined}
             disabled={
               analysisState !== "ready" ||
               items.length === 0 ||
               !allDraftsValid ||
-              isSaving ||
               savedCount === items.length
             }
             onClick={handleSaveAll}
           >
-            {isSaving
-              ? `正在上传第 ${Math.min(savedCount + 1, items.length)}/${items.length} 个批次…`
-              : `上传 ${items.length - savedCount} 个批次`}
+            上传 {items.length - savedCount} 个批次
           </Button>
+          {isSaving && (
+            <div
+              className="relative flex h-9 min-w-60 items-center justify-center overflow-hidden rounded-md border border-zinc-300 bg-zinc-100 px-4 text-sm font-medium text-zinc-900"
+              role="progressbar"
+              aria-label="歌曲上传进度"
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={uploadPercent}
+            >
+              <span
+                className="absolute inset-y-0 left-0 bg-lime-300 transition-[width] duration-150 ease-out"
+                style={{ width: `${uploadPercent}%` }}
+              />
+              <span className="relative tabular-nums">
+                第 {Math.min(savedCount + 1, items.length)}/{items.length} 批 · {uploadPercent}%
+              </span>
+            </div>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

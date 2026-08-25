@@ -1,12 +1,8 @@
-"use server";
-
-import { revalidatePath } from "next/cache";
-
 import { saveMusicToCatalog } from "@/lib/music-catalog/music-catalog-service";
 import { parseMusicDraft } from "@/lib/music-catalog/draft-validation";
 import { parseMusicFolderFiles } from "@/lib/music-catalog/music-folder";
 
-export type SaveMusicDraftResult = {
+type UploadMusicDraftResult = {
   ok: boolean;
   message: string;
   trackId?: string;
@@ -17,12 +13,14 @@ function getMusicFile(value: FormDataEntryValue | null) {
   return value;
 }
 
-export async function saveMusicDraft(
-  formData: FormData,
-): Promise<SaveMusicDraftResult> {
+export async function POST(request: Request) {
   try {
+    const formData = await request.formData();
     const folderName = formData.get("folderName");
-    if (typeof folderName !== "string") throw new Error("缺少歌曲文件夹名称");
+    if (typeof folderName !== "string") {
+      throw new Error("缺少歌曲文件夹名称");
+    }
+
     const folder = parseMusicFolderFiles(folderName, [
       getMusicFile(formData.get("highFile")),
       getMusicFile(formData.get("lowFile")),
@@ -34,12 +32,19 @@ export async function saveMusicDraft(
       [folder.highFile, folder.lowFile, folder.coverFile],
       draft,
     );
-    revalidatePath("/");
-    return { ok: true, message: "歌曲上传并保存成功", trackId: track.id };
+
+    return Response.json({
+      ok: true,
+      message: "歌曲上传并保存成功",
+      trackId: track.id,
+    } satisfies UploadMusicDraftResult);
   } catch (error) {
-    return {
-      ok: false,
-      message: error instanceof Error ? error.message : "保存失败，请稍后重试",
-    };
+    return Response.json(
+      {
+        ok: false,
+        message: error instanceof Error ? error.message : "保存失败，请稍后重试",
+      } satisfies UploadMusicDraftResult,
+      { status: 400 },
+    );
   }
 }
