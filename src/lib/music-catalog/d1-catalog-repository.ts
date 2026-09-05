@@ -5,12 +5,23 @@ import { canChangeTrackStatus, trackStatusLabels } from "./publication-status";
 import type { MusicCatalogRepository } from "./repository-types";
 import type {
   MusicDraftInput,
+  StoredAlbum,
   StoredTrack,
   TrackPublicationStatus,
 } from "./types";
 
 type MusicTrackRow = {
+  album_id: string | null;
   track_json: string;
+};
+
+type MusicAlbumRow = {
+  id: string;
+  title: string;
+  artist: string;
+  year: number | null;
+  created_at: string;
+  updated_at: string;
 };
 
 function parseStoredTrackRow(row: MusicTrackRow) {
@@ -26,11 +37,65 @@ function parseStoredTrackRow(row: MusicTrackRow) {
     throw new Error("D1 曲库中的歌曲数据格式无效");
   }
 
-  return normalizeStoredTrack(value);
+  return normalizeStoredTrack({
+    ...value,
+    albumId: row.album_id ?? undefined,
+  });
+}
+
+function parseStoredAlbumRow(row: MusicAlbumRow): StoredAlbum {
+  return {
+    id: row.id,
+    title: row.title,
+    artist: row.artist,
+    year: row.year ?? undefined,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
 }
 
 export class D1MusicCatalogRepository implements MusicCatalogRepository {
   constructor(private readonly database: D1Database) {}
+
+  async listAlbums() {
+    const result = await this.database
+      .prepare(
+        `SELECT id, title, artist, year, created_at, updated_at
+         FROM music_albums
+         ORDER BY updated_at DESC, title COLLATE NOCASE ASC`,
+      )
+      .all<MusicAlbumRow>();
+    return result.results.map(parseStoredAlbumRow);
+  }
+
+  async saveAlbum(album: StoredAlbum) {
+    await this.database
+      .prepare(
+        `INSERT INTO music_albums (id, title, artist, year, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?)
+         ON CONFLICT DO NOTHING`,
+      )
+      .bind(
+        album.id,
+        album.title,
+        album.artist,
+        album.year ?? null,
+        album.createdAt,
+        album.updatedAt,
+      )
+      .run();
+
+    const row = await this.database
+      .prepare(
+        `SELECT id, title, artist, year, created_at, updated_at
+         FROM music_albums
+         WHERE lower(title) = lower(?) AND lower(artist) = lower(?)`,
+      )
+      .bind(album.title, album.artist)
+      .first<MusicAlbumRow>();
+    if (!row) throw new Error("专辑保存失败");
+    return parseStoredAlbumRow(row);
+  }
 
   async deleteTrack(trackId: string) {
     const track = await this.getTrack(trackId);
@@ -47,7 +112,7 @@ export class D1MusicCatalogRepository implements MusicCatalogRepository {
   async listTracks() {
     const result = await this.database
       .prepare(
-        "SELECT track_json FROM music_tracks ORDER BY updated_at DESC, id ASC",
+        "SELECT album_id, track_json FROM music_tracks ORDER BY updated_at DESC, id ASC",
       )
       .all<MusicTrackRow>();
 
@@ -58,8 +123,8 @@ export class D1MusicCatalogRepository implements MusicCatalogRepository {
     await this.database
       .prepare(
         `INSERT INTO music_tracks
-           (id, status, title, updated_at, genre_ids, mood_ids, use_case_ids, track_json)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+           (id, status, title, updated_at, genre_ids, mood_ids, use_case_ids, album_id, track_json)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(id) DO UPDATE SET
            status = excluded.status,
            title = excluded.title,
@@ -67,6 +132,7 @@ export class D1MusicCatalogRepository implements MusicCatalogRepository {
            genre_ids = excluded.genre_ids,
            mood_ids = excluded.mood_ids,
            use_case_ids = excluded.use_case_ids,
+           album_id = excluded.album_id,
            track_json = excluded.track_json`,
       )
       .bind(
@@ -77,6 +143,7 @@ export class D1MusicCatalogRepository implements MusicCatalogRepository {
         JSON.stringify(track.genreIds),
         JSON.stringify(track.moodIds),
         JSON.stringify(track.useCaseIds),
+        track.albumId ?? null,
         JSON.stringify(track),
       )
       .run();
@@ -119,7 +186,7 @@ export class D1MusicCatalogRepository implements MusicCatalogRepository {
 
   private async getTrack(trackId: string) {
     const row = await this.database
-      .prepare("SELECT track_json FROM music_tracks WHERE id = ?")
+      .prepare("SELECT album_id, track_json FROM music_tracks WHERE id = ?")
       .bind(trackId)
       .first<MusicTrackRow>();
 

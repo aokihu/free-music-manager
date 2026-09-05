@@ -3,6 +3,7 @@ import "server-only";
 import { getDeploymentAdapters } from "../deployment";
 import type {
   MusicDraftInput,
+  StoredAlbum,
   StoredTrack,
   TrackPublicationStatus,
 } from "./types";
@@ -13,6 +14,14 @@ function getCatalogRepository() {
 
 export function listStoredTracks(): Promise<StoredTrack[]> {
   return getCatalogRepository().listTracks();
+}
+
+export function listStoredAlbums(): Promise<StoredAlbum[]> {
+  return getCatalogRepository().listAlbums();
+}
+
+export function saveStoredAlbum(album: StoredAlbum): Promise<StoredAlbum> {
+  return getCatalogRepository().saveAlbum(album);
 }
 
 export function saveStoredTrack(track: StoredTrack): Promise<void> {

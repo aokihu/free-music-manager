@@ -35,6 +35,10 @@ export function parseMusicDraft(
     title,
     artist: typeof draft.artist === "string" ? draft.artist.trim() : "",
     album: typeof draft.album === "string" ? draft.album.trim() : "",
+    albumId:
+      typeof draft.albumId === "string" && draft.albumId.trim()
+        ? draft.albumId.trim()
+        : undefined,
     genreIds: parseMusicTaxonomyIds(draft.genreIds, musicGenreOptions),
     bpm: parseOptionalNumber(draft.bpm, 1, 300),
     moodIds: parseMusicTaxonomyIds(draft.moodIds, musicMoodOptions),

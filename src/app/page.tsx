@@ -17,6 +17,7 @@ import { MusicUploadDialog } from "@/components/music-upload-dialog";
 import { trackStatusLabels } from "@/lib/music-catalog/publication-status";
 import {
   listManagerTracks,
+  listManagerAlbums,
   type ManagerTrack,
   type TrackPublicationStatus,
 } from "@/lib/music-catalog/music-catalog-service";
@@ -158,6 +159,11 @@ function DesktopTrackTable({ tracks }: { tracks: ManagerTrack[] }) {
                     <span className="mt-1 block truncate text-xs text-zinc-500">
                       {track.artist || "未知作者"}
                     </span>
+                    {track.album && (
+                      <span className="mt-1 block truncate text-xs text-zinc-400">
+                        专辑：{track.album}
+                      </span>
+                    )}
                   </span>
                 </div>
               </td>
@@ -201,6 +207,11 @@ function MobileTrackList({ tracks }: { tracks: ManagerTrack[] }) {
                   <p className="mt-1 truncate text-xs text-zinc-500">
                     {track.artist || "未知作者"}
                   </p>
+                  {track.album && (
+                    <p className="mt-1 truncate text-xs text-zinc-400">
+                      专辑：{track.album}
+                    </p>
+                  )}
                 </div>
                 <StatusBadge status={track.status} />
               </div>
@@ -227,7 +238,10 @@ function MobileTrackList({ tracks }: { tracks: ManagerTrack[] }) {
 }
 
 export default async function Home() {
-  const tracks = await listManagerTracks();
+  const [tracks, albums] = await Promise.all([
+    listManagerTracks(),
+    listManagerAlbums(),
+  ]);
   const publishedCount = tracks.filter(
     (track) => track.status === "published",
   ).length;
@@ -238,6 +252,7 @@ export default async function Home() {
 
   const overviewItems = [
     { label: "歌曲总数", value: tracks.length, detail: "本地曲库" },
+    { label: "专辑总数", value: albums.length, detail: "已关联专辑" },
     { label: "已发布", value: publishedCount, detail: "前台 API 可读取" },
     { label: "草稿", value: draftCount, detail: "等待补全" },
     { label: "已下架", value: offlineCount, detail: "停止展示" },
@@ -296,7 +311,7 @@ export default async function Home() {
 
           <section
             aria-label="曲库数据概览"
-            className="mt-6 grid grid-cols-2 gap-3 xl:grid-cols-4"
+            className="mt-6 grid grid-cols-2 gap-3 xl:grid-cols-5"
           >
             {overviewItems.map((item) => (
               <article className="rounded-xl border bg-white p-4 sm:p-5" key={item.label}>

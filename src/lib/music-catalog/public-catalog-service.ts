@@ -1,6 +1,6 @@
 import "server-only";
 
-import { listStoredTracks } from "./catalog-repository";
+import { listStoredAlbums, listStoredTracks } from "./catalog-repository";
 import {
   getMusicTaxonomyLabels,
   musicGenreOptions,
@@ -34,6 +34,8 @@ function toPublicTrack(track: StoredTrack, origin: string) {
     id: track.id,
     title: track.title,
     artist: track.artist,
+    album: track.album,
+    albumId: track.albumId ?? null,
     mood: moods[0] ?? "",
     moods,
     moodIds: track.moodIds,
@@ -67,6 +69,31 @@ export async function listPublicTracks(origin: string) {
     .filter((track) => track.status === "published")
     .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
     .map((track) => toPublicTrack(track, origin));
+}
+
+export async function listPublicAlbums(origin: string) {
+  const [albums, tracks] = await Promise.all([listStoredAlbums(), listStoredTracks()]);
+  const publishedTracks = tracks.filter((track) => track.status === "published");
+
+  return albums.flatMap((album) => {
+    const albumTracks = publishedTracks.filter((track) => track.albumId === album.id);
+    if (albumTracks.length === 0) return [];
+    const coverTrack = albumTracks.find((track) => track.cover) ?? albumTracks[0];
+    return [{
+      id: album.id,
+      title: album.title,
+      artist: album.artist,
+      year: album.year ?? null,
+      trackIds: albumTracks.map((track) => track.id),
+      trackCount: albumTracks.length,
+      coverUrl: createPublicUrl(
+        origin,
+        coverTrack.cover
+          ? `/api/tracks/${encodeURIComponent(coverTrack.id)}/cover`
+          : "/cover-placeholder.png",
+      ),
+    }];
+  });
 }
 
 export async function getPublishedTrack(trackId: string) {

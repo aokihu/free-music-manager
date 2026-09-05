@@ -6,7 +6,9 @@ import { parseBuffer } from "music-metadata";
 import { getMusicStorage } from "../storage";
 import {
   deleteStoredTrack,
+  listStoredAlbums,
   listStoredTracks,
+  saveStoredAlbum,
   saveStoredTrack,
   updateStoredTrackDraft,
   updateStoredTrackStatus,
@@ -21,6 +23,7 @@ import {
 } from "./music-taxonomy";
 import type {
   ManagerTrack,
+  ManagerAlbum,
   MusicDraftInput,
   StoredAudioFile,
   StoredTrack,
@@ -54,6 +57,7 @@ function toManagerTrack(track: StoredTrack): ManagerTrack {
     title: track.title,
     artist: track.artist,
     album: track.album,
+    albumId: track.albumId,
     genreIds: track.genreIds,
     genres,
     bpm: track.bpm,
@@ -72,11 +76,35 @@ function toManagerTrack(track: StoredTrack): ManagerTrack {
   };
 }
 
+async function resolveTrackAlbum(draft: MusicDraftInput): Promise<MusicDraftInput> {
+  const title = draft.album.trim();
+  if (!title) return { ...draft, album: "", albumId: undefined };
+
+  const albums = await listStoredAlbums();
+  const existing = albums.find(
+    (album) =>
+      album.title.toLocaleLowerCase() === title.toLocaleLowerCase() &&
+      album.artist.toLocaleLowerCase() === draft.artist.toLocaleLowerCase(),
+  );
+  if (existing) return { ...draft, album: existing.title, albumId: existing.id };
+
+  const now = new Date().toISOString();
+  const album = await saveStoredAlbum({
+    id: `album-${crypto.randomUUID()}`,
+    title,
+    artist: draft.artist,
+    year: draft.year,
+    createdAt: now,
+    updatedAt: now,
+  });
+  return { ...draft, album: album.title, albumId: album.id };
+}
+
 export async function updateMusicTrackDraft(
   trackId: string,
   draft: MusicDraftInput,
 ) {
-  return updateStoredTrackDraft(trackId, draft);
+  return updateStoredTrackDraft(trackId, await resolveTrackAlbum(draft));
 }
 
 async function readCoverImage(file: File) {
@@ -117,7 +145,10 @@ export async function updateMusicTrackContent(
   coverFile?: File,
   removeCover = false,
 ) {
-  if (!coverFile && !removeCover) return updateStoredTrackDraft(trackId, draft);
+  const resolvedDraft = await resolveTrackAlbum(draft);
+  if (!coverFile && !removeCover) {
+    return updateStoredTrackDraft(trackId, resolvedDraft);
+  }
 
   const tracks = await listStoredTracks();
   const currentTrack = tracks.find((track) => track.id === trackId);
@@ -126,7 +157,7 @@ export async function updateMusicTrackContent(
   if (removeCover) {
     const updatedTrack: StoredTrack = {
       ...currentTrack,
-      ...draft,
+      ...resolvedDraft,
       cover: undefined,
       updatedAt: new Date().toISOString(),
     };
@@ -147,7 +178,7 @@ export async function updateMusicTrackContent(
 
   const updatedTrack: StoredTrack = {
     ...currentTrack,
-    ...draft,
+    ...resolvedDraft,
     cover: {
       key: coverKey,
       contentType: coverImage.contentType,
@@ -175,6 +206,14 @@ export async function listManagerTracks() {
   return tracks
     .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
     .map(toManagerTrack);
+}
+
+export async function listManagerAlbums(): Promise<ManagerAlbum[]> {
+  const [albums, tracks] = await Promise.all([listStoredAlbums(), listStoredTracks()]);
+  return albums.map((album) => ({
+    ...album,
+    trackCount: tracks.filter((track) => track.albumId === album.id).length,
+  }));
 }
 
 export async function deleteMusicTrack(trackId: string) {
@@ -244,6 +283,7 @@ export async function saveMusicToCatalog(
   const existingTrack = (await listStoredTracks()).find(
     (track) => track.id === id,
   );
+  const resolvedDraft = await resolveTrackAlbum(draft);
 
   await Promise.all([
     storage.putObject(highKey, highBytes, {
@@ -288,7 +328,7 @@ export async function saveMusicToCatalog(
   const track: StoredTrack = {
     id,
     sourceFolderName: folder.folderName,
-    ...draft,
+    ...resolvedDraft,
     status: existingTrack?.status ?? "draft",
     audio: {
       high: createStoredAudioFile(
@@ -309,6 +349,7 @@ export async function saveMusicToCatalog(
 }
 
 export type {
+  ManagerAlbum,
   ManagerTrack,
   MusicDraftInput,
   TrackPublicationStatus,

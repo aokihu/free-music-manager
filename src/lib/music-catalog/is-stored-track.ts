@@ -28,7 +28,7 @@ export function isStoredTrack(value: unknown): value is StoredTrack {
   );
 }
 
-export function normalizeStoredTrack(value: StoredTrack) {
+export function normalizeStoredTrack(value: StoredTrack): StoredTrack {
   const legacyTrack = value as StoredTrack & {
     genres?: string[];
     mood?: string;
@@ -49,5 +49,11 @@ export function normalizeStoredTrack(value: StoredTrack) {
     ),
   ) as StoredTrack;
 
-  return { ...track, genreIds, moodIds, useCaseIds } satisfies StoredTrack;
+  return {
+    ...track,
+    albumId: typeof legacyTrack.albumId === "string" ? legacyTrack.albumId : undefined,
+    genreIds,
+    moodIds,
+    useCaseIds,
+  } satisfies StoredTrack;
 }

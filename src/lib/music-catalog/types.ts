@@ -4,12 +4,26 @@ export type MusicDraftInput = {
   title: string;
   artist: string;
   album: string;
+  albumId?: string;
   genreIds: string[];
   bpm?: number;
   moodIds: string[];
   useCaseIds: string[];
   year?: number;
   comment: string;
+};
+
+export type StoredAlbum = {
+  id: string;
+  title: string;
+  artist: string;
+  year?: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type ManagerAlbum = StoredAlbum & {
+  trackCount: number;
 };
 
 export type StoredAudioFile = {
@@ -46,6 +60,7 @@ export type ManagerTrack = {
   title: string;
   artist: string;
   album: string;
+  albumId?: string;
   genreIds: string[];
   genres: string[];
   bpm?: number;

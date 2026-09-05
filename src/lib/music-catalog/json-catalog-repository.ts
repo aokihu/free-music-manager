@@ -6,16 +6,52 @@ import { isStoredTrack, normalizeStoredTrack } from "./is-stored-track";
 import type { MusicCatalogRepository } from "./repository-types";
 import type {
   MusicDraftInput,
+  StoredAlbum,
   StoredTrack,
   TrackPublicationStatus,
 } from "./types";
 
 const catalogKey = "catalog/tracks.json";
+const albumsKey = "catalog/albums.json";
 
 export class JsonMusicCatalogRepository implements MusicCatalogRepository {
   private catalogWriteQueue = Promise.resolve();
 
   constructor(private readonly storage: MusicStorageAdapter) {}
+
+  async listAlbums() {
+    const bytes = await this.storage.getObject(albumsKey);
+    if (!bytes) return [];
+    const value: unknown = JSON.parse(new TextDecoder().decode(bytes));
+    if (!Array.isArray(value)) throw new Error("本地专辑索引格式无效");
+    return value.filter((album): album is StoredAlbum =>
+      Boolean(
+        album &&
+          typeof album === "object" &&
+          typeof (album as StoredAlbum).id === "string" &&
+          typeof (album as StoredAlbum).title === "string",
+      ),
+    );
+  }
+
+  async saveAlbum(album: StoredAlbum) {
+    return this.queueCatalogWrite(async () => {
+      const albums = await this.listAlbums();
+      const existing = albums.find(
+        (item) =>
+          item.title.toLocaleLowerCase() === album.title.toLocaleLowerCase() &&
+          item.artist.toLocaleLowerCase() === album.artist.toLocaleLowerCase(),
+      );
+      if (existing) return existing;
+      albums.unshift(album);
+      await this.storage.putObject(
+        albumsKey,
+        new TextEncoder().encode(JSON.stringify(albums, null, 2)),
+        { contentType: "application/json" },
+      );
+      return album;
+    });
+  }
 
   async deleteTrack(trackId: string) {
     return this.queueCatalogWrite(async () => {
